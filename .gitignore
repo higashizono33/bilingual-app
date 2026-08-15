@@ -1,0 +1,42 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-error.log*
+dist/
+build/
+.next/
+out/
+
+# AWS CDK
+infra/cdk.out/
+infra/*.d.ts
+infra/*.js
+!infra/jest.config.js
+cdk.context.json
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# 子供の動画・音声・写真などの個人データは絶対にコミットしない（S3のみに保存）
+*.mp4
+*.mov
+*.wav
+*.m4a
+/media/
+/videos/
+
+# Logs
+*.log

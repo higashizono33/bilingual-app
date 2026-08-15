@@ -1,0 +1,40 @@
+name: CI
+
+# Pull Request 時に Lint / 簡易テストを実行する（docs/requirements.md 8.5章）。
+# app/ と infra/ にまだ実装コード（package.json）が無いため、現状は
+# ファイルの存在チェックのみを行う placeholder。実装が入り次第、
+# 各ディレクトリの lint / test ステップに差し替える。
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  app-ci:
+    name: app (frontend) lint/test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for app/package.json
+        run: |
+          if [ -f app/package.json ]; then
+            echo "TODO: npm ci && npm run lint && npm test をここに実装する"
+          else
+            echo "app/package.json がまだ無いため skip（雛形段階）"
+          fi
+
+  infra-ci:
+    name: infra (CDK) lint/test/synth
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for infra/package.json
+        run: |
+          if [ -f infra/package.json ]; then
+            echo "TODO: npm ci && npm run lint && npx cdk synth をここに実装する"
+          else
+            echo "infra/package.json がまだ無いため skip（雛形段階）"
+          fi

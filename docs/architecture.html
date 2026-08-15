@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bilingual App — AWS 構成図（コスト最小構成）</title>
+<style>
+  :root {
+    --ink: #1f2933;
+    --sub: #52606d;
+    --line: #d8dde3;
+    --bg: #f5f6f8;
+    --card: #ffffff;
+    --aws: #ff9900;
+    --aws-soft: #fff4e0;
+    --aws-line: #e8ac4c;
+    --home: #3f6fb4;
+    --home-soft: #e8f0fb;
+    --skip: #7b8794;
+    --skip-soft: #eef1f4;
+    --future: #9d6fd6;
+    --future-soft: #f3ecfb;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 28px 16px 60px;
+    font-family: "Hiragino Sans", "Yu Gothic", "Segoe UI", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .subtitle { color: var(--sub); font-size: 13px; margin: 0 0 24px; }
+
+  .col { display: flex; flex-direction: column; align-items: center; }
+  .row { display: flex; justify-content: center; }
+  .arrow-v {
+    color: var(--sub);
+    font-size: 20px;
+    line-height: 1;
+    margin: 2px 0;
+  }
+  .box {
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    text-align: center;
+    font-size: 13px;
+    min-width: 200px;
+    border: 1.5px solid var(--line);
+    background: var(--card);
+    box-shadow: 0 1px 2px rgba(20,30,40,.05);
+  }
+  .box .icon { font-size: 20px; display: block; margin-bottom: 4px; }
+  .box .title { font-weight: 700; }
+  .box .desc { color: var(--sub); font-size: 11px; margin-top: 3px; line-height: 1.4; }
+
+  .box.home { background: var(--home-soft); border-color: var(--home); }
+  .box.home .title { color: var(--home); }
+  .box.aws { background: var(--aws-soft); border-color: var(--aws-line); }
+  .box.aws .title { color: #a35a00; }
+  .box.skip { background: var(--skip-soft); border-color: var(--line); }
+  .box.skip .title { color: var(--skip); }
+  .box.future { background: var(--future-soft); border-color: var(--future); border-style: dashed; }
+  .box.future .title { color: var(--future); }
+
+  .cloud {
+    margin-top: 10px;
+    border: 2px dashed var(--aws-line);
+    border-radius: 20px;
+    padding: 28px 20px 24px;
+    position: relative;
+    background: repeating-linear-gradient(135deg, rgba(255,153,0,.03) 0 12px, transparent 12px 24px);
+  }
+  .cloud-label {
+    position: absolute;
+    top: -13px;
+    left: 24px;
+    background: var(--bg);
+    padding: 0 8px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #a35a00;
+  }
+
+  .branches {
+    display: flex;
+    justify-content: center;
+    gap: 48px;
+    margin-top: 4px;
+  }
+  .branch { display: flex; flex-direction: column; align-items: center; }
+  .branch-label {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 999px;
+    margin-bottom: 8px;
+  }
+  .branch-label.ja { background: var(--skip-soft); color: var(--skip); }
+  .branch-label.en { background: var(--aws-soft); color: #a35a00; }
+
+  .converge {
+    margin-top: 10px;
+    display: flex;
+    justify-content: center;
+  }
+  .converge svg { display: block; }
+
+  .side-branch {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+  }
+  .side-arrow { color: var(--future); font-size: 16px; }
+
+  .legend {
+    margin-top: 28px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    font-size: 12px;
+    color: var(--sub);
+    justify-content: center;
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+
+  .note-card {
+    margin-top: 20px;
+    background: #fbf6e8;
+    border: 1px solid #ecdca6;
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-size: 12.5px;
+    color: var(--sub);
+    max-width: 720px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .note-card b { color: var(--ink); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chip {
+    font-size: 11px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: #fff;
+    border: 1px solid var(--line);
+    color: var(--skip);
+    text-decoration: line-through;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🌏 Bilingual App — AWS 構成図（コスト最小構成 v0.3）</h1>
+  <p class="subtitle">毎日の英語・日本語の動画回答 → S3保存 → 英語のみAI分析 → ダッシュボード表示。requirements.md 8章に対応。</p>
+
+  <!-- 家庭側 -->
+  <div class="col">
+    <div class="box home">
+      <span class="icon">👨‍👩‍👧‍👦</span>
+      <span class="title">保護者が質問</span>
+      <div class="desc">「今日は何をした？」を英語・日本語で問いかけ</div>
+    </div>
+    <div class="arrow-v">↓</div>
+    <div class="box home">
+      <span class="icon">📱</span>
+      <span class="title">子供が動画で回答</span>
+      <div class="desc">en.mp4 / ja.mp4 をそれぞれ撮影</div>
+    </div>
+    <div class="arrow-v">↓</div>
+    <div class="box home">
+      <span class="icon">🔐</span>
+      <span class="title">Presigned URL でアップロード</span>
+      <div class="desc">バックエンド非経由・転送コストなし</div>
+    </div>
+    <div class="arrow-v">↓</div>
+  </div>
+
+  <!-- AWS Cloud -->
+  <div class="cloud">
+    <span class="cloud-label">☁️ AWS Cloud（家族専用アカウント）</span>
+
+    <div class="col">
+      <div class="box aws">
+        <span class="icon">🪣</span>
+        <span class="title">Amazon S3（Private）</span>
+        <div class="desc">SSE-S3暗号化（無料） / childId/date/lang.mp4</div>
+      </div>
+    </div>
+
+    <div class="branches">
+      <!-- 日本語ブランチ -->
+      <div class="branch">
+        <div class="branch-label ja">🇯🇵 ja.mp4</div>
+        <div class="arrow-v">↓</div>
+        <div class="box skip">
+          <span class="icon">💾</span>
+          <span class="title">保存のみ</span>
+          <div class="desc">AI分析対象外（参考記録・比較用）</div>
+        </div>
+      </div>
+
+      <!-- 英語ブランチ -->
+      <div class="branch">
+        <div class="branch-label en">🇺🇸 en.mp4</div>
+        <div class="arrow-v">↓</div>
+        <div class="box aws">
+          <span class="icon">⚡</span>
+          <span class="title">Lambda（トリガー）</span>
+          <div class="desc">S3イベント直起動・言語フィルタ</div>
+        </div>
+        <div class="arrow-v">↓</div>
+        <div class="box aws">
+          <span class="icon">🗣️</span>
+          <span class="title">Amazon Transcribe</span>
+          <div class="desc">非同期ジョブ / 月60分は無料枠内目安</div>
+        </div>
+        <div class="arrow-v">↓</div>
+        <div class="box aws">
+          <span class="icon">⚡</span>
+          <span class="title">Lambda（語彙分析）</span>
+          <div class="desc">ルールベース：語数・ユニーク語彙・新出語彙</div>
+        </div>
+        <div class="arrow-v">↓</div>
+        <div class="box aws">
+          <span class="icon">🗄️</span>
+          <span class="title">DynamoDB（オンデマンド）</span>
+          <div class="desc">分析結果・累積語彙リストを子供別に保存</div>
+        </div>
+
+        <div class="side-branch">
+          <span class="side-arrow">┄┄▶</span>
+          <div class="box future">
+            <span class="icon">🤖</span>
+            <span class="title">Amazon Bedrock</span>
+            <div class="desc">将来オプション：文法・CEFR相当の定性評価<br>（コスト優先のため初期MVPでは見送り）</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="converge">
+      <svg width="260" height="40" viewBox="0 0 260 40">
+        <path d="M 40 0 L 130 32" stroke="#9aa5b1" stroke-width="2" fill="none"/>
+        <path d="M 220 0 L 130 32" stroke="#9aa5b1" stroke-width="2" fill="none"/>
+        <polygon points="130,32 124,22 136,22" fill="#9aa5b1"/>
+      </svg>
+    </div>
+
+    <div class="col">
+      <div class="box aws">
+        <span class="icon">🌐</span>
+        <span class="title">S3 静的ホスティング（ダッシュボード）</span>
+        <div class="desc">CloudFrontなし（家族限定アクセスのため不要）</div>
+      </div>
+      <div class="arrow-v">↑ 認証</div>
+      <div class="box aws">
+        <span class="icon">🔑</span>
+        <span class="title">Amazon Cognito</span>
+        <div class="desc">家族アカウントのみ許可・無料枠内</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <div class="legend-item"><span class="swatch" style="background:var(--home)"></span>家庭側の操作</div>
+    <div class="legend-item"><span class="swatch" style="background:var(--aws)"></span>AWSマネージドサービス（MVP対象）</div>
+    <div class="legend-item"><span class="swatch" style="background:var(--skip)"></span>保存のみ・分析対象外</div>
+    <div class="legend-item"><span class="swatch" style="background:var(--future); border:1px dashed var(--future)"></span>将来オプション（当面見送り）</div>
+  </div>
+
+  <div class="note-card">
+    <b>コスト最小化のために不採用としたもの</b>（requirements.md 8章参照）
+    <div class="chips">
+      <span class="chip">EventBridge</span>
+      <span class="chip">NAT Gateway / VPC</span>
+      <span class="chip">CloudFront</span>
+      <span class="chip">SSE-KMS</span>
+      <span class="chip">Bedrock（MVP時点）</span>
+    </div>
+    概算コスト目安: 初年度はほぼ $0〜数十円/月、以降も月数ドル程度（Transcribe無料枠終了後）。動画蓄積分はS3ライフサイクルでGlacier Deep Archiveへ自動移行してストレージコストを抑制。
+  </div>
+</div>
+</body>
+</html>

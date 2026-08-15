@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bilingual App（プロトタイプ v4）</title>
+<style>
+  :root {
+    --ink: #1f2933;
+    --sub: #52606d;
+    --line: #e4e7eb;
+    --bg: #f7f8fa;
+    --card: #ffffff;
+    --accent: #3f6fb4;
+    --accent-soft: #e8f0fb;
+    --good: #2f8f5b;
+    --good-soft: #ecf8f1;
+    --warn: #c77d1a;
+    --warn-soft: #fbf1e3;
+    --ja: #3f6fb4;
+    --en: #b0563f;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Hiragino Sans", "Yu Gothic", "Segoe UI", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+  }
+  header {
+    padding: 20px 24px 16px;
+    background: var(--card);
+    border-bottom: 1px solid var(--line);
+  }
+  header h1 { margin: 0 0 4px; font-size: 20px; }
+  header p { margin: 0; color: var(--sub); font-size: 13px; }
+  main { max-width: 720px; margin: 0 auto; padding: 20px 16px 60px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  button { font-family: inherit; cursor: pointer; }
+  .primary-btn {
+    padding: 12px 20px; border-radius: 10px; border: none;
+    background: var(--accent); color: #fff; font-size: 15px; font-weight: 600;
+  }
+  .primary-btn:disabled { background: #b6c4d8; cursor: not-allowed; }
+  .danger-btn { background: #c94b4b; }
+  .ghost-btn {
+    padding: 10px 16px; border-radius: 10px; border: 1.5px solid var(--line);
+    background: #fff; color: var(--sub); font-size: 14px;
+  }
+  .tile {
+    border: 1.5px solid var(--line); border-radius: var(--radius);
+    padding: 18px; text-align: center; background: #fff;
+  }
+  .tile:hover { border-color: var(--accent); cursor: pointer; }
+  .tile .emoji { font-size: 34px; }
+  .tile .label { margin-top: 6px; font-weight: 600; }
+  .avatar-wrap { position: relative; display: inline-block; }
+  .avatar { border-radius: 50%; object-fit: cover; display: block; background: #eef1f4; }
+  .avatar-placeholder {
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    background: #eef1f4; color: #9aa5b1;
+  }
+  .avatar-edit-btn {
+    position: absolute; bottom: -2px; right: -2px; width: 24px; height: 24px;
+    border-radius: 50%; background: var(--accent); color: #fff; font-size: 12px;
+    display: flex; align-items: center; justify-content: center;
+    border: 2px solid #fff; cursor: pointer;
+  }
+  .tag {
+    display: inline-block; font-size: 12px; padding: 2px 8px;
+    border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-weight: 600;
+  }
+  .tag.en { background: #fbe9e3; color: var(--en); }
+  .tag.ja { background: var(--accent-soft); color: var(--ja); }
+  .step-track { display: flex; gap: 8px; margin-bottom: 18px; align-items: center; }
+  .step-dot-wrap { flex: 1; text-align: center; }
+  .step-dot { height: 5px; border-radius: 4px; background: var(--line); }
+  .step-dot.done { background: var(--good); }
+  .step-dot.active { background: var(--accent); }
+  .step-dot-label { font-size: 10px; color: var(--sub); margin-top: 4px; }
+  .step-arrow { color: var(--sub); font-size: 14px; }
+  .question-box {
+    text-align: center; padding: 18px; border-radius: 12px;
+    background: var(--accent-soft); margin-bottom: 16px;
+  }
+  .question-box.en { background: #fbe9e3; }
+  .question-box .q-text { font-size: 19px; font-weight: 700; color: var(--ink); }
+  video, audio { width: 100%; border-radius: 10px; background: #000; display: block; }
+  .rec-controls { display: flex; gap: 10px; justify-content: center; margin-top: 14px; }
+  .rec-dot { display: inline-block; width: 10px; height: 10px; background: #c94b4b; border-radius: 50%; margin-right: 6px; animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+  .muted { color: var(--sub); font-size: 13px; }
+  .note {
+    font-size: 12px; color: var(--sub); background: #fbf6e8;
+    border: 1px solid #ecdca6; border-radius: 10px; padding: 10px 12px; margin-top: 16px;
+  }
+  .fallback-upload {
+    margin-top: 10px; font-size: 12.5px; color: var(--sub);
+    border: 1px dashed var(--line); border-radius: 10px; padding: 10px;
+  }
+  .progress-wrap { margin: 18px 0; }
+  .progress-bar-bg { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
+  .progress-bar-fill { height: 100%; background: var(--accent); width: 0%; transition: width .3s; }
+  .stat-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+  .stat-tile { flex: 1 1 40%; min-width: 100px; text-align: center; padding: 14px 8px; border-radius: 10px; background: var(--good-soft); }
+  .stat-tile.duration { background: var(--warn-soft); }
+  .stat-tile.alt { background: var(--accent-soft); }
+  .stat-tile .num { font-size: 24px; font-weight: 800; color: var(--good); }
+  .stat-tile.duration .num { color: var(--warn); }
+  .stat-tile.alt .num { color: var(--accent); }
+  .table-scroll { overflow-x: auto; }
+  .stat-tile .lbl { font-size: 11px; color: var(--sub); margin-top: 2px; }
+  .back-link { font-size: 13px; color: var(--accent); cursor: pointer; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--line); }
+  th { color: var(--sub); font-weight: 600; }
+  .footer-row { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; }
+  .bridge-emoji { font-size: 44px; }
+  .chart-title { font-size: 13px; font-weight: 700; margin: 18px 0 6px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🌏 Bilingual App（プロトタイプ v4）</h1>
+  <p>日本語→英語の順の録画フローに加えて、発話速度・語彙多様度・間（ポーズ）の割合など、Transcribeの標準出力だけで出せる上達指標を追加しました。要件定義書 v1.4 に対応。</p>
+</header>
+
+<main id="app"></main>
+
+<script>
+const app = document.getElementById('app');
+
+const children = [
+  { id: 'taro', name: '長男', age: 7, photoUrl: null },
+  { id: 'jiro', name: '次男', age: 5, photoUrl: null },
+];
+
+// 子供の写真表示用ヘルパー（写真が未設定の場合はプレースホルダーを表示。絵文字アイコンは使わない）
+function avatarHTML(c, size) {
+  if (c.photoUrl) {
+    return `<img class="avatar" src="${c.photoUrl}" style="width:${size}px;height:${size}px;vertical-align:middle;">`;
+  }
+  return `<span class="avatar-placeholder" style="width:${size}px;height:${size}px;font-size:${Math.round(size * 0.5)}px;display:inline-flex;vertical-align:middle;">👤</span>`;
+}
+
+// ホーム画面用: 写真つきの子供選択タイル（右下の📷ボタンから写真を設定できる）
+function buildChildTile(c) {
+  const size = 72;
+  const wrap = el(`<div class="tile"></div>`);
+  const avatarWrap = el(`<div class="avatar-wrap"></div>`);
+  avatarWrap.innerHTML = avatarHTML(c, size);
+  const editBtn = el(`<label class="avatar-edit-btn" title="写真を設定">📷<input type="file" accept="image/*" style="display:none;"></label>`);
+  avatarWrap.appendChild(editBtn);
+  wrap.appendChild(avatarWrap);
+  wrap.appendChild(el(`<div class="label" style="margin-top:8px;">${c.name}（${c.age}歳）</div>`));
+
+  editBtn.onclick = (e) => e.stopPropagation();
+  editBtn.querySelector('input').onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    c.photoUrl = URL.createObjectURL(file);
+    render();
+  };
+
+  wrap.onclick = () => {
+    // 日本語ネイティブの子供たちなので、まず日本語で自然に答えてもらい、
+    // その後に同じ内容を英語で言ってもらう順番からスタートする
+    state = { screen: 'today', child: c, clips: {}, transitionShown: false };
+    render();
+  };
+  return wrap;
+}
+
+const dailyQuestion = { ja: '今日は何をした？', en: 'What did you do today?' };
+
+// Transcribeの標準出力（単語ごとのStartTime/EndTime/Confidence）だけで算出できる指標を、
+// durationSec・sessionWordCount・記録インデックス i から一括で算出するヘルパー。
+// wpm（発話速度）、ttr（語彙多様度）、pauseRatio（間の割合。i が進むほど滑らかになっていく想定）を返す。
+function deriveMetrics(i, durationSec, sessionWordCount) {
+  const wpm = durationSec > 0 ? Math.round((sessionWordCount / durationSec) * 60) : 0;
+  const sessionUniqueWords = sessionWordCount === 0
+    ? 0
+    : Math.max(1, Math.round(sessionWordCount * (0.55 + Math.random() * 0.35)));
+  const ttr = sessionWordCount > 0 ? +(sessionUniqueWords / sessionWordCount).toFixed(2) : null;
+  const pauseRatio = Math.min(0.6, Math.max(0.08, 0.55 - i * 0.045 + (Math.random() * 0.08 - 0.04)));
+  const totalPauseSec = +(durationSec * pauseRatio).toFixed(1);
+  const pauseCount = Math.max(0, Math.round(totalPauseSec / 1.2));
+  return {
+    wpm, sessionUniqueWords, ttr, ttrPercent: ttr === null ? null : Math.round(ttr * 100),
+    pauseRatio, pauseRatioPercent: Math.round(pauseRatio * 100), totalPauseSec, pauseCount,
+  };
+}
+
+// ダミーの過去実施履歴（累積ユニーク語彙数・新出語彙数・英語で話せた時間・発話速度・語彙多様度・間の割合）。
+// 日付は今日を起点に生成。最初は英語では数秒しか話せない想定で、話す時間が少しずつ伸び、
+// 間（ポーズ）の割合は少しずつ減っていく（＝スムーズになっていく）トレンドにしている。
+function buildDummyHistory(startCumulative, dailyDeltas) {
+  const today = new Date();
+  const rows = [];
+  let cum = startCumulative;
+  dailyDeltas.forEach((delta, i) => {
+    const d = new Date(today);
+    d.setDate(d.getDate() - (dailyDeltas.length - i));
+    cum += delta;
+    const durationSec = Math.max(1, Math.round(2 + i * 1.6 + (Math.random() * 2 - 0.5)));
+    const sessionWordCount = delta === 0 ? 0 : delta + Math.floor(Math.random() * 2);
+    rows.push({
+      date: d.toISOString().slice(0, 10),
+      newWords: delta,
+      cumulativeVocab: cum,
+      sessionWordCount,
+      durationSec,
+      ...deriveMetrics(i, durationSec, sessionWordCount),
+    });
+  });
+  return rows;
+}
+
+const history = {
+  taro: buildDummyHistory(0, [0, 1, 2, 0, 3, 2, 4, 3, 5, 4]),
+  jiro: buildDummyHistory(0, [0, 0, 1, 1, 0, 2, 1, 2]),
+};
+
+let state = { screen: 'home' };
+let mediaStream = null, mediaRecorder = null, mediaChunks = [], recTimer = null;
+
+function el(html) {
+  const div = document.createElement('div');
+  div.innerHTML = html.trim();
+  return div.firstElementChild;
+}
+
+function render() {
+  app.innerHTML = '';
+  if (state.screen === 'home') return renderHome();
+  if (state.screen === 'today') return renderToday();
+  if (state.screen === 'uploading') return renderUploading();
+  if (state.screen === 'analyzing') return renderAnalyzing();
+  if (state.screen === 'result') return renderResult();
+  if (state.screen === 'dashboard') return renderDashboard();
+}
+
+// ---------- ホーム ----------
+function renderHome() {
+  const card = el(`
+    <div class="card">
+      <p class="tag">子供を選択</p>
+      <h2 style="margin:8px 0 16px;">今日の記録をはじめる</h2>
+      <div class="grid2" id="childGrid"></div>
+    </div>
+  `);
+  const grid = card.querySelector('#childGrid');
+  children.forEach(c => grid.appendChild(buildChildTile(c)));
+  app.appendChild(card);
+
+  const dashCard = el(`<div class="card" id="toDashCard" style="text-align:center; cursor:pointer;">📊 ダッシュボードを見る</div>`);
+  dashCard.onclick = () => { state = { screen: 'dashboard', child: children[0] }; render(); };
+  app.appendChild(dashCard);
+
+  app.appendChild(el(`<div class="note">🔧 これはUI/UXのモックです。まず🇯🇵日本語で質問→回答、その後に🇺🇸同じ内容を英語で話してもらう順番にしています（子供たちは日本語ネイティブなので、この順番の方が自然に答えやすいはずです）。カメラが使えない環境では、代わりに動画ファイルを選んでデモできます。子供の写真は各タイル右下の📷から設定できます。</div>`));
+}
+
+// ---------- 今日の質問（録画フロー） ----------
+function renderToday() {
+  const { child, clips } = state;
+  const currentStep = !clips.ja ? 'ja' : (!clips.en ? 'en' : 'done');
+  const card = el(`
+    <div class="card">
+      <p class="back-link" id="back">← 子供選択に戻る</p>
+      <p class="tag">${avatarHTML(child, 20)} ${child.name}（${child.age}歳）</p>
+      <div class="step-track">
+        <div class="step-dot-wrap">
+          <div class="step-dot ${clips.ja ? 'done' : (currentStep === 'ja' ? 'active' : '')}"></div>
+          <div class="step-dot-label">① 🇯🇵 日本語で回答</div>
+        </div>
+        <div class="step-arrow">→</div>
+        <div class="step-dot-wrap">
+          <div class="step-dot ${clips.en ? 'done' : (currentStep === 'en' ? 'active' : '')}"></div>
+          <div class="step-dot-label">② 🇺🇸 英語で挑戦</div>
+        </div>
+      </div>
+      <div id="stepBody"></div>
+    </div>
+  `);
+  card.querySelector('#back').onclick = () => { stopStream(); state = { screen: 'home' }; render(); };
+  app.appendChild(card);
+  renderStepBody(card.querySelector('#stepBody'));
+}
+
+function renderStepBody(container) {
+  const { clips } = state;
+  if (!clips.ja) return renderRecordStep(container, 'ja');
+  if (!clips.en) {
+    if (!state.transitionShown) return renderTransition(container);
+    return renderRecordStep(container, 'en');
+  }
+  // 両方録画済み
+  container.appendChild(el(`
+    <div style="text-align:center;">
+      <p style="font-size:15px;">✅ 日本語・英語、どちらの回答も録画できました</p>
+      <button class="primary-btn" id="goUpload" style="margin-top:10px;">アップロードする</button>
+    </div>
+  `));
+  container.querySelector('#goUpload').onclick = () => {
+    state.screen = 'uploading';
+    render();
+  };
+}
+
+// 日本語の回答が終わった直後に表示する「次は英語で言ってみよう」の橋渡し画面
+function renderTransition(container) {
+  container.innerHTML = '';
+  const wrap = el(`
+    <div style="text-align:center;">
+      <div class="bridge-emoji">🎉➡️🇺🇸</div>
+      <p style="font-size:16px; font-weight:700; margin:10px 0 4px;">日本語での回答、ありがとう！</p>
+      <p class="muted">じゃあ次は、同じことを英語で言ってみよう。<br>最初は数秒だけでも大丈夫。話せた時間もちゃんと記録するよ。</p>
+      <button class="primary-btn" id="toEnglish" style="margin-top:14px;">🇺🇸 英語で挑戦する</button>
+    </div>
+  `);
+  container.appendChild(wrap);
+  wrap.querySelector('#toEnglish').onclick = () => {
+    state.transitionShown = true;
+    render();
+  };
+}
+
+function renderRecordStep(container, lang) {
+  container.innerHTML = '';
+  const q = dailyQuestion[lang];
+  container.appendChild(el(`
+    <div class="question-box ${lang}">
+      <span class="tag ${lang}">${lang === 'en' ? '🇺🇸 English' : '🇯🇵 日本語'}</span>
+      <div class="q-text" style="margin-top:8px;">${q}</div>
+      ${lang === 'en' ? '<p class="muted" style="margin-top:6px;">数秒だけでもOK。話せた時間も記録します。</p>' : ''}
+    </div>
+  `));
+
+  const recArea = el(`<div id="recArea"></div>`);
+  container.appendChild(recArea);
+  paintRecordArea(recArea, lang);
+}
+
+function paintRecordArea(recArea, lang) {
+  recArea.innerHTML = '';
+
+  if (!state.recording && !state.previewUrl) {
+    const btn = el(`<div style="text-align:center;"><button class="primary-btn" id="startRec">🎥 録画開始</button></div>`);
+    recArea.appendChild(btn);
+    btn.querySelector('#startRec').onclick = () => startRecording(recArea, lang);
+
+    if (state.cameraError) {
+      recArea.appendChild(el(`
+        <div class="fallback-upload">
+          ⚠️ カメラ/マイクにアクセスできませんでした（このプレビュー環境の制限の可能性があります）。代わりに動画ファイルを選んでデモできます。
+          <div style="margin-top:8px;"><input type="file" accept="video/*" id="fileFallback"></div>
+        </div>
+      `));
+      recArea.querySelector('#fileFallback').onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        state.previewUrl = URL.createObjectURL(file);
+        state.recordSeconds = 0;
+        paintRecordArea(recArea, lang);
+      };
+    }
+    return;
+  }
+
+  if (state.recording) {
+    const wrap = el(`
+      <div style="text-align:center;">
+        <video id="liveVideo" autoplay muted playsinline></video>
+        <p class="muted" style="margin-top:8px;"><span class="rec-dot"></span>録画中… ${state.recordSeconds || 0}秒</p>
+        <div class="rec-controls">
+          <button class="primary-btn danger-btn" id="stopRec">■ 録画停止</button>
+        </div>
+      </div>
+    `);
+    recArea.appendChild(wrap);
+    const liveVideo = wrap.querySelector('#liveVideo');
+    if (mediaStream) liveVideo.srcObject = mediaStream;
+    wrap.querySelector('#stopRec').onclick = () => stopRecording(recArea, lang);
+    return;
+  }
+
+  if (state.previewUrl) {
+    const wrap = el(`
+      <div style="text-align:center;">
+        <video src="${state.previewUrl}" controls playsinline></video>
+        <p class="muted" style="margin-top:6px;">録画時間: 約${state.recordSeconds || 0}秒</p>
+        <div class="rec-controls">
+          <button class="ghost-btn" id="retake">🔁 撮り直す</button>
+          <button class="primary-btn" id="useClip">この動画を使う</button>
+        </div>
+      </div>
+    `);
+    recArea.appendChild(wrap);
+    wrap.querySelector('#retake').onclick = () => {
+      state.previewUrl = null;
+      paintRecordArea(recArea, lang);
+    };
+    wrap.querySelector('#useClip').onclick = () => {
+      const duration = state.recordSeconds || Math.round(2 + Math.random() * 3);
+      state.clips[lang] = { url: state.previewUrl, duration };
+      state.previewUrl = null;
+      state.recordSeconds = 0;
+      render();
+    };
+  }
+}
+
+async function startRecording(recArea, lang) {
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    mediaChunks = [];
+    mediaRecorder = new MediaRecorder(mediaStream);
+    mediaRecorder.ondataavailable = e => mediaChunks.push(e.data);
+    mediaRecorder.onstop = () => {
+      const blob = new Blob(mediaChunks, { type: 'video/webm' });
+      state.previewUrl = URL.createObjectURL(blob);
+      state.recording = false;
+      paintRecordArea(recArea, lang);
+    };
+    mediaRecorder.start();
+    state.recording = true;
+    state.recordSeconds = 0;
+    state.cameraError = null;
+    recTimer = setInterval(() => {
+      state.recordSeconds++;
+      const p = recArea.querySelector('p.muted');
+      if (p) p.innerHTML = `<span class="rec-dot"></span>録画中… ${state.recordSeconds}秒`;
+    }, 1000);
+    paintRecordArea(recArea, lang);
+  } catch (err) {
+    state.cameraError = err;
+    paintRecordArea(recArea, lang);
+  }
+}
+
+function stopRecording(recArea, lang) {
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+  stopStream();
+}
+
+function stopStream() {
+  if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
+  mediaStream = null;
+  if (recTimer) clearInterval(recTimer);
+}
+
+// ---------- アップロード（モック） ----------
+function renderUploading() {
+  const card = el(`
+    <div class="card" style="text-align:center;">
+      <p class="tag">☁️ Amazon S3 へアップロード中</p>
+      <h2 style="margin:10px 0;">動画をアップロードしています…</h2>
+      <div class="progress-wrap">
+        <div class="progress-bar-bg"><div class="progress-bar-fill" id="fill"></div></div>
+      </div>
+      <p class="muted">ja.mp4 / en.mp4 を Presigned URL 経由でS3へ直送（モック）</p>
+    </div>
+  `);
+  app.appendChild(card);
+  const fill = card.querySelector('#fill');
+  let pct = 0;
+  const timer = setInterval(() => {
+    pct += 100 / 15;
+    fill.style.width = Math.min(pct, 100) + '%';
+    if (pct >= 100) {
+      clearInterval(timer);
+      setTimeout(() => { state.screen = 'analyzing'; render(); }, 300);
+    }
+  }, 100);
+}
+
+function renderAnalyzing() {
+  const card = el(`
+    <div class="card" style="text-align:center;">
+      <p class="tag">⚡ Lambda → 🗣️ Amazon Transcribe</p>
+      <h2 style="margin:10px 0;">英語の回答を分析しています…</h2>
+      <p class="muted">音声をテキスト化 → 語彙をレンマ単位でカウント／発話時間・発話速度・語彙多様度・間（ポーズ）を計測（日本語は分析せず参考記録として保存のみ）</p>
+      <div style="font-size:30px; margin-top:14px;">⏳</div>
+    </div>
+  `);
+  app.appendChild(card);
+  setTimeout(() => {
+    const { child, clips } = state;
+    const h = history[child.id];
+    const last = h[h.length - 1] || { cumulativeVocab: 0 };
+    const newWords = Math.floor(Math.random() * 4);
+    const sessionWordCount = newWords === 0 ? Math.floor(Math.random() * 2) : newWords + Math.floor(Math.random() * 2);
+    const today = new Date().toISOString().slice(0, 10);
+    const durationSec = (clips.en && clips.en.duration) || Math.round(2 + Math.random() * 3);
+    const entry = {
+      date: today,
+      newWords,
+      cumulativeVocab: last.cumulativeVocab + newWords,
+      sessionWordCount,
+      durationSec,
+      ...deriveMetrics(h.length, durationSec, sessionWordCount),
+    };
+    h.push(entry);
+    state.todayResult = entry;
+    state.screen = 'result';
+    render();
+  }, 1600);
+}
+
+function renderResult() {
+  const { child, todayResult } = state;
+  const card = el(`
+    <div class="card" style="text-align:center;">
+      <p class="tag">✅ 分析完了</p>
+      <h2 style="margin:10px 0;">今日の記録が保存されました</h2>
+      <div class="stat-row">
+        <div class="stat-tile duration">
+          <div class="num">${todayResult.durationSec}秒</div>
+          <div class="lbl">英語で話せた時間</div>
+        </div>
+        <div class="stat-tile alt">
+          <div class="num">${todayResult.wpm}</div>
+          <div class="lbl">発話速度（words/分）</div>
+        </div>
+        <div class="stat-tile">
+          <div class="num">${todayResult.sessionWordCount}</div>
+          <div class="lbl">今日の発話語数</div>
+        </div>
+        <div class="stat-tile">
+          <div class="num">${todayResult.newWords}</div>
+          <div class="lbl">新出語彙数</div>
+        </div>
+        <div class="stat-tile">
+          <div class="num">${todayResult.cumulativeVocab}</div>
+          <div class="lbl">累積ユニーク語彙数</div>
+        </div>
+        <div class="stat-tile alt">
+          <div class="num">${todayResult.ttrPercent === null ? '－' : todayResult.ttrPercent + '%'}</div>
+          <div class="lbl">語彙多様度（TTR）</div>
+        </div>
+        <div class="stat-tile alt">
+          <div class="num">${todayResult.pauseRatioPercent}%</div>
+          <div class="lbl">間（ポーズ）の割合</div>
+        </div>
+      </div>
+      <p class="muted" style="margin-top:14px;">日本語の回答も動画として保存済みです（参考記録・分析対象外）</p>
+      <div class="footer-row" style="justify-content:center; gap:10px;">
+        <button class="ghost-btn" id="toHome">ホームに戻る</button>
+        <button class="primary-btn" id="toDash">ダッシュボードを見る</button>
+      </div>
+    </div>
+  `);
+  card.querySelector('#toHome').onclick = () => { state = { screen: 'home' }; render(); };
+  card.querySelector('#toDash').onclick = () => { state = { screen: 'dashboard', child }; render(); };
+  app.appendChild(card);
+}
+
+// ---------- ダッシュボード ----------
+function renderDashboard() {
+  const { child } = state;
+  const rows = history[child.id];
+  const latest = rows[rows.length - 1];
+
+  const card = el(`
+    <div class="card">
+      <p class="back-link" id="back2">← ホームに戻る</p>
+      <p class="tag">${avatarHTML(child, 20)} ${child.name}（${child.age}歳）の英語の伸び</p>
+      <div class="stat-row">
+        <div class="stat-tile duration">
+          <div class="num">${latest ? latest.durationSec : 0}秒</div>
+          <div class="lbl">直近の英語発話時間</div>
+        </div>
+        <div class="stat-tile alt">
+          <div class="num">${latest ? latest.wpm : 0}</div>
+          <div class="lbl">直近の発話速度（words/分）</div>
+        </div>
+        <div class="stat-tile">
+          <div class="num">${latest ? latest.cumulativeVocab : 0}</div>
+          <div class="lbl">累積ユニーク語彙数</div>
+        </div>
+        <div class="stat-tile">
+          <div class="num">${rows.length}</div>
+          <div class="lbl">記録日数</div>
+        </div>
+      </div>
+
+      <div class="chart-title">🗣️ 英語で話せた時間の推移（秒）</div>
+      <div id="durationChart"></div>
+
+      <div class="chart-title">🏃 発話速度の推移（words per minute）</div>
+      <div id="wpmChart"></div>
+
+      <div class="chart-title">📚 累積ユニーク語彙数の推移</div>
+      <div id="vocabChart"></div>
+
+      <div class="chart-title">🎨 語彙多様度の推移（Type-Token Ratio, %）</div>
+      <div id="ttrChart"></div>
+
+      <div class="chart-title">⏸️ 間（ポーズ）の割合の推移（%・下がるほどスムーズ）</div>
+      <div id="pauseChart"></div>
+
+      <div class="table-scroll">
+        <table style="margin-top:16px; min-width:560px;">
+          <thead><tr><th>日付</th><th>発話時間</th><th>速度</th><th>TTR</th><th>間の割合</th><th>発話語数</th><th>新出語彙</th><th>累積語彙</th></tr></thead>
+          <tbody>
+            ${rows.slice().reverse().map(r => `
+              <tr>
+                <td>${r.date}</td><td>${r.durationSec}秒</td><td>${r.wpm}</td>
+                <td>${r.ttrPercent === null ? '－' : r.ttrPercent + '%'}</td>
+                <td>${r.pauseRatioPercent}%</td>
+                <td>${r.sessionWordCount}</td><td>+${r.newWords}</td><td>${r.cumulativeVocab}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div class="note">📌 発話速度・語彙多様度（TTR）・間（ポーズ）の割合は、いずれもAmazon Transcribeの標準出力（単語ごとのStartTime/EndTime）だけで追加コストなしに算出できる指標です。「英語で話せた時間」は英語力ほぼゼロから始まる今回のケースで特に重要な指標。累積ユニーク語彙数はレンマ（word family）ベースでカウントする方針です。日本語の回答動画はここでは数値化せず、参考記録として別途視聴できる想定です。</div>
+    </div>
+  `);
+  card.querySelector('#back2').onclick = () => { state = { screen: 'home' }; render(); };
+  card.querySelector('#durationChart').appendChild(buildLineChart(rows, {
+    field: 'durationSec', color: '#c77d1a', unit: '秒',
+  }));
+  card.querySelector('#wpmChart').appendChild(buildLineChart(rows, {
+    field: 'wpm', color: '#7a5ea8', unit: '',
+  }));
+  card.querySelector('#vocabChart').appendChild(buildLineChart(rows, {
+    field: 'cumulativeVocab', color: '#3f6fb4',
+    dotColorFn: r => (r.newWords > 0 ? '#2f8f5b' : '#3f6fb4'),
+  }));
+  card.querySelector('#ttrChart').appendChild(buildLineChart(rows, {
+    field: 'ttrPercent', color: '#2f8f5b', unit: '%',
+  }));
+  card.querySelector('#pauseChart').appendChild(buildLineChart(rows, {
+    field: 'pauseRatioPercent', color: '#52606d', unit: '%',
+  }));
+  app.appendChild(card);
+
+  const switcher = el(`<div class="grid2" style="margin-top:12px;"></div>`);
+  children.forEach(c => {
+    const btn = el(`<div class="tile" style="padding:10px;"><div class="label">${avatarHTML(c, 20)} ${c.name}を見る</div></div>`);
+    btn.onclick = () => { state = { screen: 'dashboard', child: c }; render(); };
+    switcher.appendChild(btn);
+  });
+  app.appendChild(switcher);
+}
+
+function buildLineChart(rows, opts) {
+  const { field, color, dotColorFn, unit = '' } = opts;
+  const w = 640, h = 170, pad = 32;
+  const max = Math.max(5, ...rows.map(r => r[field]));
+  const svgns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgns, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+  svg.setAttribute('width', '100%');
+  svg.style.background = '#fbfcfd';
+  svg.style.border = '1px solid var(--line)';
+  svg.style.borderRadius = '10px';
+
+  const steps = 4;
+  for (let i = 0; i <= steps; i++) {
+    const v = Math.round((max / steps) * i);
+    const y = h - pad - (v / max) * (h - pad * 2);
+    const line = document.createElementNS(svgns, 'line');
+    line.setAttribute('x1', pad); line.setAttribute('x2', w - 10);
+    line.setAttribute('y1', y); line.setAttribute('y2', y);
+    line.setAttribute('stroke', '#eceff1');
+    svg.appendChild(line);
+    const label = document.createElementNS(svgns, 'text');
+    label.setAttribute('x', 4); label.setAttribute('y', y + 4);
+    label.setAttribute('font-size', '10'); label.setAttribute('fill', '#9aa5b1');
+    label.textContent = v + unit;
+    svg.appendChild(label);
+  }
+
+  function pointXY(r, i) {
+    const x = pad + (i / Math.max(rows.length - 1, 1)) * (w - pad - 20);
+    const y = h - pad - (r[field] / max) * (h - pad * 2);
+    return [x, y];
+  }
+  const poly = document.createElementNS(svgns, 'polyline');
+  poly.setAttribute('points', rows.map((r, i) => pointXY(r, i).join(',')).join(' '));
+  poly.setAttribute('fill', 'none');
+  poly.setAttribute('stroke', color);
+  poly.setAttribute('stroke-width', '2.5');
+  svg.appendChild(poly);
+
+  rows.forEach((r, i) => {
+    const [x, y] = pointXY(r, i);
+    const c = document.createElementNS(svgns, 'circle');
+    c.setAttribute('cx', x); c.setAttribute('cy', y); c.setAttribute('r', 4);
+    c.setAttribute('fill', dotColorFn ? dotColorFn(r) : color);
+    svg.appendChild(c);
+  });
+  return svg;
+}
+
+render();
+</script>
+</body>
+</html>
