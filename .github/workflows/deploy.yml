@@ -68,15 +68,21 @@ jobs:
           fi
           npx cdk deploy BilingualAppStack --require-approval never $CONTEXT_ARGS
 
-      - name: Resolve dashboard bucket name from stack outputs
+      - name: Resolve dashboard bucket name and app config from stack outputs
         id: stack-outputs
         run: |
-          BUCKET=$(aws cloudformation describe-stacks --stack-name BilingualAppStack \
-            --query "Stacks[0].Outputs[?OutputKey=='DashboardBucketName'].OutputValue" --output text)
-          echo "bucket=$BUCKET" >> "$GITHUB_OUTPUT"
+          OUTPUTS=$(aws cloudformation describe-stacks --stack-name BilingualAppStack --query "Stacks[0].Outputs" --output json)
+          echo "bucket=$(echo "$OUTPUTS" | jq -r '.[] | select(.OutputKey=="DashboardBucketName") | .OutputValue')" >> "$GITHUB_OUTPUT"
+          echo "api_url=$(echo "$OUTPUTS" | jq -r '.[] | select(.OutputKey=="ApiUrl") | .OutputValue')" >> "$GITHUB_OUTPUT"
+          echo "user_pool_id=$(echo "$OUTPUTS" | jq -r '.[] | select(.OutputKey=="UserPoolId") | .OutputValue')" >> "$GITHUB_OUTPUT"
+          echo "user_pool_client_id=$(echo "$OUTPUTS" | jq -r '.[] | select(.OutputKey=="UserPoolClientId") | .OutputValue')" >> "$GITHUB_OUTPUT"
 
       - name: Build dashboard (app/)
         working-directory: app
+        env:
+          VITE_API_BASE_URL: ${{ steps.stack-outputs.outputs.api_url }}
+          VITE_COGNITO_USER_POOL_ID: ${{ steps.stack-outputs.outputs.user_pool_id }}
+          VITE_COGNITO_USER_POOL_CLIENT_ID: ${{ steps.stack-outputs.outputs.user_pool_client_id }}
         run: npm run build
 
       - name: Sync dashboard static files to S3 (app/)
