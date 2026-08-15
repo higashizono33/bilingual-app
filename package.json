@@ -1,0 +1,20 @@
+{
+  "name": "bilingual-app",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "packages/*",
+    "app",
+    "infra"
+  ],
+  "scripts": {
+    "build:analysis": "npm run build -w packages/analysis",
+    "test:analysis": "npm run test -w packages/analysis",
+    "lint:app": "npm run lint -w app",
+    "test:app": "npm run test -w app",
+    "build:app": "npm run build -w app",
+    "build:infra": "npm run build -w infra",
+    "test:infra": "npm run test -w infra",
+    "synth:infra": "npm run synth -w infra"
+  }
+}

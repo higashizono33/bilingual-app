@@ -1,40 +1,55 @@
 name: CI
 
-# Pull Request 時に Lint / 簡易テストを実行する（docs/requirements.md 8.5章）。
-# app/ と infra/ にまだ実装コード（package.json）が無いため、現状は
-# ファイルの存在チェックのみを行う placeholder。実装が入り次第、
-# 各ディレクトリの lint / test ステップに差し替える。
+# Pull Request時にlint/testを実行する(docs/requirements.md 8.5章)。
+# npm workspaces構成(packages/analysis, app, infra)のため、ルートで一括インストールしてから
+# 各ワークスペースのスクリプトを順番に実行する。
+# infra(CDK)はpackages/analysisのビルド成果物(dist/)をLambdaコードから参照するため、
+# 先にanalysisをビルドしてからinfraのbuild/test/synthを実行する順序に注意。
 
 on:
   pull_request:
+    branches: [main]
+  push:
     branches: [main]
 
 permissions:
   contents: read
 
 jobs:
-  app-ci:
-    name: app (frontend) lint/test
+  ci:
+    name: lint / test / build / cdk synth
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Check for app/package.json
-        run: |
-          if [ -f app/package.json ]; then
-            echo "TODO: npm ci && npm run lint && npm test をここに実装する"
-          else
-            echo "app/package.json がまだ無いため skip（雛形段階）"
-          fi
 
-  infra-ci:
-    name: infra (CDK) lint/test/synth
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Check for infra/package.json
-        run: |
-          if [ -f infra/package.json ]; then
-            echo "TODO: npm ci && npm run lint && npx cdk synth をここに実装する"
-          else
-            echo "infra/package.json がまだ無いため skip（雛形段階）"
-          fi
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies (workspace root)
+        run: npm ci
+
+      - name: Build @bilingual-app/analysis
+        run: npm run build:analysis
+
+      - name: Test @bilingual-app/analysis (語彙分析ロジックのユニットテスト)
+        run: npm run test:analysis
+
+      - name: Lint app
+        run: npm run lint:app
+
+      - name: Test app
+        run: npm run test:app
+
+      - name: Build app (React + Vite)
+        run: npm run build:app
+
+      - name: Build infra (CDKスタック定義の型チェック)
+        run: npm run build:infra
+
+      - name: Test infra (CDKスタックのユニットテスト)
+        run: npm run test:infra
+
+      - name: cdk synth (Lambdaバンドル込みでCloudFormationテンプレートを検証)
+        run: npm run synth:infra

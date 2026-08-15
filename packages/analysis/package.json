@@ -1,0 +1,23 @@
+{
+  "name": "@bilingual-app/analysis",
+  "version": "0.1.0",
+  "description": "Transcribe結果から要件定義書6章の英語習得指標(発話語数・ユニーク語彙数・新出語彙数・WPM・TTR・ポーズ分析)を算出する共有ロジック。Lambda(infra/lambda)から利用する。",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4",
+    "vitest": "^4.1.10"
+  }
+}
