@@ -1,45 +1,75 @@
 name: Deploy
 
-# main ブランチへのマージをトリガーに本番環境へ自動デプロイする
-# (docs/requirements.md 8.5章)。
+# mainブランチへのマージをトリガーに本番環境へ自動デプロイする(docs/requirements.md 8.5章)。
 #
 # AWSへの認証は長期アクセスキーをSecretsに置かず、GitHub OIDCで
 # IAMロールを一時的にAssumeする方式を使う。実際に有効化する際は:
-#   1. AWS側でGitHub OIDC IDプロバイダとデプロイ用IAMロールを作成
+#   1. Takashiさん自身のAWS管理者権限で、GitHub OIDC IDプロバイダとデプロイ用IAMロールを作成する
+#      (infra/lib/github-oidc-stack.ts。GitHub Actions自身には作らせられないため手動デプロイ専用)
+#        cd infra && npx cdk deploy GitHubOidcStack -c githubRepo=higashizono33/bilingual-app
+#      出力される DeployRoleArn を控える
 #   2. リポジトリの Settings > Secrets and variables > Actions に
-#      AWS_DEPLOY_ROLE_ARN (IAMロールARN) を登録
-#   3. 下記 `if: false` を外し、AWS_DEPLOY_ROLE_ARN 未設定時にジョブが
-#      失敗しないことを確認してから有効化する
+#      AWS_DEPLOY_ROLE_ARN (手順1のDeployRoleArn) を登録
+#      (任意) BUDGET_ALERT_EMAIL を登録すると、AWS BudgetsのアラートをEmail購読する
+#   3. (完了) Secrets設定後、有効化済み
+#   4. 初回のみ、Takashiさん自身の権限で `cdk bootstrap` と
+#      `cdk deploy BilingualAppStack`(初回デプロイ)を1度実行しておくとスムーズ
+#      (このワークフローはBilingualAppStackの更新デプロイのみを行う。GitHubOidcStack自体は
+#       このワークフローの対象に含めない)
 
 on:
   push:
     branches: [main]
 
 permissions:
-  id-token: write   # OIDCでAWS認証するために必要
+  id-token: write # OIDCでAWS認証するために必要
   contents: read
 
 jobs:
   deploy:
     name: Deploy infra + app
     runs-on: ubuntu-latest
-    # infra/ 実装 & AWS_DEPLOY_ROLE_ARN Secret 設定が完了するまでは無効化しておく
-    if: false
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies (workspace root)
+        run: npm ci
+
+      - name: Build @bilingual-app/analysis (Lambdaコードから参照される共有ロジック)
+        run: npm run build:analysis
 
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: us-east-1 # 必要に応じて変更
+          aws-region: us-east-2 # 必要に応じて変更
 
-      - name: Deploy CDK stacks (infra/)
+      - name: Deploy CDK stack (infra/BilingualAppStackのみ。GitHubOidcStackは対象外)
+        working-directory: infra
+        env:
+          BUDGET_ALERT_EMAIL: ${{ secrets.BUDGET_ALERT_EMAIL }}
         run: |
-          cd infra
-          npm ci
-          npx cdk deploy --all --require-approval never
+          CONTEXT_ARGS=""
+          if [ -n "$BUDGET_ALERT_EMAIL" ]; then
+            CONTEXT_ARGS="-c budgetAlertEmail=$BUDGET_ALERT_EMAIL"
+          fi
+          npx cdk deploy BilingualAppStack --require-approval never $CONTEXT_ARGS
+
+      - name: Resolve dashboard bucket name from stack outputs
+        id: stack-outputs
+        run: |
+          BUCKET=$(aws cloudformation describe-stacks --stack-name BilingualAppStack \
+            --query "Stacks[0].Outputs[?OutputKey=='DashboardBucketName'].OutputValue" --output text)
+          echo "bucket=$BUCKET" >> "$GITHUB_OUTPUT"
+
+      - name: Build dashboard (app/)
+        working-directory: app
+        run: npm run build
 
       - name: Sync dashboard static files to S3 (app/)
-        run: |
-          echo "TODO: aws s3 sync app/dist s3://<dashboard-bucket>/ --delete"
+        run: aws s3 sync app/dist "s3://${{ steps.stack-outputs.outputs.bucket }}/" --delete
