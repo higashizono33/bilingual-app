@@ -13,9 +13,11 @@ name: Deploy
 #      (任意) BUDGET_ALERT_EMAIL を登録すると、AWS BudgetsのアラートをEmail購読する
 #   3. (完了) Secrets設定後、有効化済み
 #   4. 初回のみ、Takashiさん自身の権限で `cdk bootstrap` と
-#      `cdk deploy BilingualAppStack`(初回デプロイ)を1度実行しておくとスムーズ
-#      (このワークフローはBilingualAppStackの更新デプロイのみを行う。GitHubOidcStack自体は
-#       このワークフローの対象に含めない)
+#      `cdk deploy BilingualAppStackの更新デプロイのみを行う。GitHubOidcStackのトラストポリシーが従来形式(IDなし)のままだと
+# "Not authorized to perform sts:AssumeRoleWithWebIdentity" で失敗する。
+# infra/lib/github-oidc-stack.ts の githubRepoOwnerId/githubRepoId で対応済み
+# (infra/README.md 参照)。トラストポリシーを変更した場合は必ず
+# `cdk deploy GitHubOidcStack` を手動で再実行してAWS側に反映すること。
 
 on:
   push:
@@ -43,17 +45,16 @@ jobs:
       - name: Build @bilingual-app/analysis (Lambdaコードから参照される共有ロジック)
         run: npm run build:analysis
 
-      - name: Debug OIDC token claims (temporary - remove after)
-        run: |
-          IDTOKEN=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r '.value')
-          echo "$IDTOKEN" | cut -d "." -f2 | base64 -d 2>/dev/null | jq .
-
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: us-east-2 # 必要に応じて変更
+          # aws-actions/configure-aws-credentials はデフォルトでGitHubコンテキストを
+          # セッションタグとして付与しようとするが、GitHubOidcStackのトラストポリシーは
+          # sts:AssumeRoleWithWebIdentity のみ許可(sts:TagSessionは許可していない)ため、
+          # タグ付けをスキップする。付与しない場合エラーは紛らわしく
+          # "Not authorized to perform sts:AssumeRoleWithWebIdentity" として出る。
           role-skip-session-tagging: true
 
       - name: Deploy CDK stack (infra/BilingualAppStackのみ。GitHubOidcStackは対象外)

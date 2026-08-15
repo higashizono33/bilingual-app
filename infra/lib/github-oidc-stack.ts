@@ -7,6 +7,16 @@ export interface GitHubOidcStackProps extends cdk.StackProps {
   githubRepo: string;
   /** このロールを引き受けられるブランチ。デフォルトはmainのみ(pushトリガーのデプロイに限定) */
   allowedBranch?: string;
+  /**
+   * GitHubの repository_owner_id (不変ID)。指定すると sub クレームの条件が
+   * `repo:<owner>@<ownerId>/<repo>@<repoId>:ref:refs/heads/<branch>` という不変ID付き形式になる(GitHubがオーナー名/リポジトリ名の変更・譲渡耐性のために
+   * 採用している新しいsubクレーム形式。実際にActions上で発行されるトークンの
+   * `sub`をデコードして確認した値と一致させる必要がある)。
+   * 未指定の場合は従来形式 `repo:<owner>/<repo>:ref:refs/heads/<branch>` を使う。
+   */
+  githubRepoOwnerId?: string;
+  /** GitHubの repository_id (不変ID)。githubRepoOwnerIdとセットで指定する。 */
+  githubRepoId?: string;
 }
 
 /**
@@ -31,6 +41,15 @@ export class GitHubOidcStack extends cdk.Stack {
 
     const allowedBranch = props.allowedBranch ?? 'main';
 
+    // GitHubのsubクレームは `repo:OWNER/REPO:ref:refs/heads/BRANCH` という従来形式に加えて、
+    // 不変ID付きの `repo:OWNER@OWNER_ID/REPO@REPO_ID:ref:refs/heads/BRANCH` 形式でも
+    // 発行される場合がある(実際にActionsのログでOIDCトークンをデコードして確認した実測値に
+    // 基づく)。githubRepoOwnerId/githubRepoIdが指定されていればそちらを使う。
+    const [githubOwner, githubRepoName] = props.githubRepo.split('/');
+    const subOwner = props.githubRepoOwnerId ? `${githubOwner}@${props.githubRepoOwnerId}` : githubOwner;
+    const subRepo = props.githubRepoId ? `${githubRepoName}@${props.githubRepoId}` : githubRepoName;
+    const subClaim = `repo:${subOwner}/${subRepo}:ref:refs/heads/${allowedBranch}`;
+
     // 1アカウントにつきGitHub用OIDCプロバイダは1つしか作成できない。
     // 既に他プロジェクトで作成済みの場合はこのブロックを削除し、
     // `iam.OpenIdConnectProvider.fromOpenIdConnectProviderArn(...)` で既存のものをimportすること。
@@ -48,7 +67,7 @@ export class GitHubOidcStack extends cdk.Stack {
             'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com',
           },
           StringLike: {
-            'token.actions.githubusercontent.com:sub': `repo:${props.githubRepo}:ref:refs/heads/${allowedBranch}`,
+            'token.actions.githubusercontent.com:sub': subClaim,
           },
         },
         'sts:AssumeRoleWithWebIdentity',
