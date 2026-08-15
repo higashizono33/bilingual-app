@@ -40,3 +40,7 @@ cdk.context.json
 
 # Logs
 *.log
+
+
+# 作業用の退避フォルダ（コミット対象外）
+_to_delete/
