@@ -68,6 +68,10 @@ export class ApiConstruct extends Construct {
       timeout: Duration.seconds(60),
     });
     storage.mediaBucket.grantRead(onVideoUploadedFn);
+    // Transcribeの`OutputBucketName`指定時、出力JSONの書き込みは呼び出し元(このLambda)の
+    // IAM権限で行われる。書き込み権限が無いと`StartTranscriptionJob`が
+    // "The specified S3 bucket can't be accessed"で失敗する(実機検証で確認済み)
+    storage.mediaBucket.grantPut(onVideoUploadedFn);
     storage.recordingsTable.grantReadWriteData(onVideoUploadedFn);
     onVideoUploadedFn.addToRolePolicy(
       new iam.PolicyStatement({
@@ -96,6 +100,8 @@ export class ApiConstruct extends Construct {
       timeout: Duration.seconds(60),
     });
     storage.mediaBucket.grantRead(onTranscribeCompleteFn);
+    // リトライ時に自身もStartTranscriptionJobを呼ぶため、onVideoUploadedFnと同様に書き込み権限が必要
+    storage.mediaBucket.grantPut(onTranscribeCompleteFn);
     storage.recordingsTable.grantReadWriteData(onTranscribeCompleteFn);
     storage.analysisResultsTable.grantReadWriteData(onTranscribeCompleteFn);
     storage.childrenTable.grantReadWriteData(onTranscribeCompleteFn);
