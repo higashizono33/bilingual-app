@@ -4,6 +4,8 @@ export {
   computePauseMetrics,
   computeSentenceMetrics,
   analyzeTranscribeResult,
+  pickPrimarySpeaker,
+  reconstructTranscript,
 } from './metrics.js';
 export type {
   SessionWordMetrics,

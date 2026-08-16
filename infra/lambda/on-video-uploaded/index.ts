@@ -67,6 +67,9 @@ export const handler: S3Handler = async (event) => {
         Media: { MediaFileUri: `s3://${bucket}/${key}` },
         OutputBucketName: bucket,
         OutputKey: outputKey,
+        // 話者分離(追加コストなし)。親の声が動画に混入した場合に、発話時間の長い話者(子供と推定)
+        // だけを分析対象にするために使う(@bilingual-app/analysisのanalyzeTranscribeResult参照)
+        Settings: { ShowSpeakerLabels: true, MaxSpeakerLabels: 2 },
       }),
     );
 

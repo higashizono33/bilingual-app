@@ -3,12 +3,16 @@ import { lemmatize, tokenize } from './lemmatize.js';
 /**
  * Amazon Transcribe の標準出力(JSON)のうち、本アプリで使う部分の最小限の型定義。
  * https://docs.aws.amazon.com/transcribe/latest/dg/how-input.html
+ *
+ * `speaker_label`はTranscriptionJobの`Settings.ShowSpeakerLabels: true`指定時のみ含まれる
+ * (話者分離。親の声が動画に混入した場合に子供の発話だけを抽出するために使う。下記参照)。
  */
 export interface TranscribeItem {
   type: 'pronunciation' | 'punctuation';
   alternatives: { content: string; confidence?: string }[];
   start_time?: string;
   end_time?: string;
+  speaker_label?: string;
 }
 
 export interface TranscribeResult {
@@ -29,6 +33,8 @@ export interface SessionWordMetrics {
   cumulativeUniqueWordCount: number;
   /** このセッションで使われたレンマ一覧(次回の累積語彙集合の更新に使う) */
   sessionLemmas: string[];
+  /** このセッションで初めて登場したレンマ一覧(newWordCountの内訳。文字起こし上でのハイライト表示用) */
+  newLemmas: string[];
   /** 発話速度(words per minute) */
   wordsPerMinute: number;
   /** 語彙多様度(Type-Token Ratio)。発話がない場合はnull */
@@ -50,8 +56,12 @@ export function computeSessionWordMetrics(params: {
   const uniqueWordCount = lemmaSet.size;
 
   let newWordCount = 0;
+  const newLemmas: string[] = [];
   for (const lemma of lemmaSet) {
-    if (!priorLemmas.has(lemma)) newWordCount++;
+    if (!priorLemmas.has(lemma)) {
+      newWordCount++;
+      newLemmas.push(lemma);
+    }
   }
   const cumulativeUniqueWordCount = priorLemmas.size + newWordCount;
 
@@ -64,9 +74,60 @@ export function computeSessionWordMetrics(params: {
     newWordCount,
     cumulativeUniqueWordCount,
     sessionLemmas: Array.from(lemmaSet),
+    newLemmas,
     wordsPerMinute,
     typeTokenRatio,
   };
+}
+
+/**
+ * 話者分離(`speaker_label`)が有効な場合に、最も発話時間が長い話者を「子供」とみなして返す
+ * (要件定義書外・実機フィードバックにより追加。録画時に親の声が混入しても、親が短く質問して
+ * 子供が長く答える、という前提のもと発話時間の多い方を子供と判定する簡易ヒューリスティック)。
+ * `speaker_label`が1つも無い場合(話者分離が無効、または単一話者)はundefinedを返し、
+ * 呼び出し側はフィルタせず全文をそのまま使う。
+ */
+export function pickPrimarySpeaker(items: TranscribeItem[]): string | undefined {
+  const durationBySpeaker = new Map<string, number>();
+
+  for (const item of items) {
+    if (item.type !== 'pronunciation' || !item.speaker_label) continue;
+    const start = item.start_time !== undefined ? Number.parseFloat(item.start_time) : NaN;
+    const end = item.end_time !== undefined ? Number.parseFloat(item.end_time) : NaN;
+    if (Number.isNaN(start) || Number.isNaN(end)) continue;
+    durationBySpeaker.set(item.speaker_label, (durationBySpeaker.get(item.speaker_label) ?? 0) + (end - start));
+  }
+
+  if (durationBySpeaker.size === 0) return undefined;
+
+  let primarySpeaker: string | undefined;
+  let maxDuration = -1;
+  for (const [speaker, duration] of durationBySpeaker) {
+    if (duration > maxDuration) {
+      maxDuration = duration;
+      primarySpeaker = speaker;
+    }
+  }
+  return primarySpeaker;
+}
+
+/**
+ * items配列から指定話者(未指定の場合は全話者)の発話だけをつなげて文字列に復元する。
+ * type: 'punctuation'のアイテムは直前の単語に空白無しで連結する(Transcribeの標準的な復元方法)。
+ */
+export function reconstructTranscript(items: TranscribeItem[], speakerLabel?: string): string {
+  let text = '';
+  for (const item of items) {
+    if (speakerLabel !== undefined && item.speaker_label !== speakerLabel) continue;
+    const content = item.alternatives?.[0]?.content ?? '';
+    if (!content) continue;
+    if (item.type === 'punctuation' || text.length === 0) {
+      text += content;
+    } else {
+      text += ` ${content}`;
+    }
+  }
+  return text;
 }
 
 export interface PauseMetrics {
@@ -145,24 +206,41 @@ export interface AnalysisInput {
  */
 export interface AnalysisResult extends SessionWordMetrics, PauseMetrics, SentenceMetrics {
   durationSec: number;
+  /**
+   * 分析対象になった発話の文字起こし。話者分離(speaker_label)が有効な場合は最も発話時間が
+   * 長い話者(=子供と推定)の発話だけに絞った文字列、話者分離が無効な場合は全文をそのまま使う。
+   * ダッシュボードで「実際に何を話して、何がカウントされたか」を可視化するために保存・表示する。
+   */
+  transcript: string;
 }
 
 /**
  * Transcribeの1ジョブ分の結果から、ダッシュボード表示用のAnalysisResultをまとめて算出する。
  * 無音・極端に短い発話でも例外を投げず、0件相当の結果を返す(要件定義書6章末尾の注記)。
+ *
+ * 話者分離(`Settings.ShowSpeakerLabels`)が有効な場合、録画に親の声が混入していても
+ * 発話時間の長い話者(子供と推定)だけに絞り込んでから語彙・ポーズ・文の指標を算出する
+ * (実機フィードバックにより追加。`pickPrimarySpeaker`/`reconstructTranscript`参照)。
  */
 export function analyzeTranscribeResult(input: AnalysisInput): AnalysisResult {
   const { transcribeResult, durationSec, priorLemmas, pauseThresholdSec } = input;
-  const transcript = transcribeResult.results?.transcripts?.[0]?.transcript ?? '';
   const items = transcribeResult.results?.items ?? [];
+  const primarySpeaker = pickPrimarySpeaker(items);
+
+  const transcript =
+    primarySpeaker !== undefined
+      ? reconstructTranscript(items, primarySpeaker)
+      : (transcribeResult.results?.transcripts?.[0]?.transcript ?? '');
+  const relevantItems = primarySpeaker !== undefined ? items.filter((i) => i.speaker_label === primarySpeaker) : items;
 
   const tokens = tokenize(transcript);
   const wordMetrics = computeSessionWordMetrics({ tokens, durationSec, priorLemmas });
-  const pauseMetrics = computePauseMetrics(items, pauseThresholdSec);
+  const pauseMetrics = computePauseMetrics(relevantItems, pauseThresholdSec);
   const sentenceMetrics = computeSentenceMetrics(transcript, wordMetrics.wordCount);
 
   return {
     durationSec,
+    transcript,
     ...wordMetrics,
     ...pauseMetrics,
     ...sentenceMetrics,

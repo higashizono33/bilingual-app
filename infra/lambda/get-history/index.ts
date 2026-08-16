@@ -67,6 +67,7 @@ export async function handler(
         videoUrlEn,
         durationSecJa: rec.durationSecJa ?? null,
         durationSecEn: rec.durationSecEn ?? null,
+        transcriptEn: rec.transcriptEn ?? null,
         analysis: analysis.Item ?? null,
       };
     }),

@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { getHistory, presignUpload, uploadToPresignedUrl } from '../api/client';
 import { RecordStep } from '../components/RecordStep';
+import { TranscriptView } from '../components/TranscriptView';
 import type { RecorderResult } from '../hooks/useRecorder';
 import type { BackgroundEffect } from '../utils/backgroundProcessor';
 import type { HistoryEntry } from '../types';
@@ -342,6 +343,13 @@ function ResultView({
             label="語彙多様度(TTR)"
             variant="alt"
           />
+        </div>
+      )}
+      {a && entry.transcriptEn && (
+        <div className="transcript-box">
+          <p className="chart-title">🗣️ 子供が話した内容</p>
+          <TranscriptView transcript={entry.transcriptEn} newLemmas={a.newLemmas} />
+          <p className="muted">🟢 ハイライトされた単語が、今回新出語彙としてカウントされました</p>
         </div>
       )}
       <p className="muted">日本語の回答も動画として保存済みです(参考記録・分析対象外)</p>

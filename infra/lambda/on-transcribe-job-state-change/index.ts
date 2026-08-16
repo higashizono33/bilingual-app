@@ -72,6 +72,8 @@ export const handler = async (
           Media: { MediaFileUri: `s3://${MEDIA_BUCKET_NAME}/${key}` },
           OutputBucketName: MEDIA_BUCKET_NAME,
           OutputKey: outputKey,
+          // 初回起動(on-video-uploaded)と同じ設定を維持する
+          Settings: { ShowSpeakerLabels: true, MaxSpeakerLabels: 2 },
         }),
       );
       await ddb.send(
@@ -113,8 +115,8 @@ export const handler = async (
     priorLemmas,
   });
 
-  const transcriptText = transcribeResult.results?.transcripts?.[0]?.transcript ?? '';
-
+  // 話者分離が有効な場合、analysis.transcriptは発話時間の長い話者(子供と推定)の発話だけに
+  // 絞り込んだ文字列になっている(親の声が混入していても分析・表示から除外される)
   await ddb.send(
     new PutCommand({
       TableName: ANALYSIS_RESULTS_TABLE_NAME,
@@ -133,6 +135,8 @@ export const handler = async (
         avgSentenceLength: analysis.avgSentenceLength,
         pauseCount: analysis.pauseCount,
         totalPauseSec: analysis.totalPauseSec,
+        // ダッシュボードで「何を話して何が新出語彙としてカウントされたか」をハイライト表示するために保存
+        newLemmas: analysis.newLemmas,
       },
     }),
   );
@@ -143,7 +147,7 @@ export const handler = async (
       Key: { childId, date },
       UpdateExpression: 'SET #status = :analyzed, transcriptEn = :transcript',
       ExpressionAttributeNames: { '#status': 'status' },
-      ExpressionAttributeValues: { ':analyzed': 'analyzed', ':transcript': transcriptText },
+      ExpressionAttributeValues: { ':analyzed': 'analyzed', ':transcript': analysis.transcript },
     }),
   );
 

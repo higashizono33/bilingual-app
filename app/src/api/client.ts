@@ -93,7 +93,12 @@ export function uploadToPresignedUrl(
     };
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) resolve();
-      else reject(new ApiError(xhr.status, `upload failed: ${xhr.status}`));
+      else {
+        // S3のエラーレスポンス(XML)には<Code>SignatureDoesNotMatch</Code>等の具体的な原因が入っているので、
+        // ステータスコードだけでなく本文も表示する(原因調査を実機ログ無しでできるようにするため)
+        const detail = xhr.responseText ? ` (${xhr.responseText.slice(0, 300)})` : '';
+        reject(new ApiError(xhr.status, `upload failed: ${xhr.status}${detail}`));
+      }
     };
     xhr.onerror = () => reject(new Error('network error during upload'));
     xhr.send(blob);

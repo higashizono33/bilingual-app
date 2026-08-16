@@ -26,6 +26,8 @@ export interface AnalysisResult {
   avgSentenceLength: number | null;
   pauseCount: number;
   totalPauseSec: number;
+  /** このセッションで初めて登場したレンマ一覧(newWordCountの内訳)。transcriptEn上でのハイライト表示用 */
+  newLemmas: string[];
 }
 
 export interface HistoryEntry {
@@ -36,6 +38,11 @@ export interface HistoryEntry {
   videoUrlEn: string | null;
   durationSecJa: number | null;
   durationSecEn: number | null;
+  /**
+   * 英語動画の文字起こし(話者分離が有効な場合、親の声を除いた子供の発話のみ)。
+   * 未分析またはTranscribeがまだ完了していない場合はnull
+   */
+  transcriptEn: string | null;
   analysis: AnalysisResult | null;
 }
 

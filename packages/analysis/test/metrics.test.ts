@@ -4,6 +4,8 @@ import {
   computePauseMetrics,
   computeSentenceMetrics,
   computeSessionWordMetrics,
+  pickPrimarySpeaker,
+  reconstructTranscript,
   type TranscribeResult,
 } from '../src/metrics.js';
 
@@ -30,6 +32,7 @@ describe('computeSessionWordMetrics', () => {
     // "home" のみ新出
     expect(result.newWordCount).toBe(1);
     expect(result.cumulativeUniqueWordCount).toBe(priorLemmas.size + 1);
+    expect(result.newLemmas).toEqual(['home']);
   });
 
   it('無音(空トークン)でもエラーにならず0を返す', () => {
@@ -144,5 +147,85 @@ describe('analyzeTranscribeResult', () => {
     });
     expect(result.wordCount).toBe(0);
     expect(result.cumulativeUniqueWordCount).toBe(1); // priorLemmasのまま
+  });
+
+  it('話者分離が有効な場合、発話時間の長い話者(子供)の発話だけを分析対象にする(親の声混入対策)', () => {
+    // 親(spk_0)が短く質問し、子供(spk_1)が長く答えるシナリオ
+    const withParentVoice: TranscribeResult = {
+      results: {
+        transcripts: [{ transcript: 'What did you do today? I went to the park.' }],
+        items: [
+          { type: 'pronunciation', alternatives: [{ content: 'What' }], start_time: '0.0', end_time: '0.2', speaker_label: 'spk_0' },
+          { type: 'pronunciation', alternatives: [{ content: 'did' }], start_time: '0.2', end_time: '0.4', speaker_label: 'spk_0' },
+          { type: 'pronunciation', alternatives: [{ content: 'you' }], start_time: '0.4', end_time: '0.6', speaker_label: 'spk_0' },
+          { type: 'pronunciation', alternatives: [{ content: 'do' }], start_time: '0.6', end_time: '0.8', speaker_label: 'spk_0' },
+          { type: 'pronunciation', alternatives: [{ content: 'today' }], start_time: '0.8', end_time: '1.0', speaker_label: 'spk_0' },
+          { type: 'punctuation', alternatives: [{ content: '?' }], speaker_label: 'spk_0' },
+          { type: 'pronunciation', alternatives: [{ content: 'I' }], start_time: '2.0', end_time: '2.5', speaker_label: 'spk_1' },
+          { type: 'pronunciation', alternatives: [{ content: 'went' }], start_time: '2.5', end_time: '3.0', speaker_label: 'spk_1' },
+          { type: 'pronunciation', alternatives: [{ content: 'to' }], start_time: '3.0', end_time: '3.5', speaker_label: 'spk_1' },
+          { type: 'pronunciation', alternatives: [{ content: 'the' }], start_time: '3.5', end_time: '4.0', speaker_label: 'spk_1' },
+          { type: 'pronunciation', alternatives: [{ content: 'park' }], start_time: '4.0', end_time: '4.5', speaker_label: 'spk_1' },
+          { type: 'punctuation', alternatives: [{ content: '.' }], speaker_label: 'spk_1' },
+        ],
+      },
+    };
+    const result = analyzeTranscribeResult({
+      transcribeResult: withParentVoice,
+      durationSec: 5,
+      priorLemmas: new Set(),
+    });
+    // 親の発話("What did you do today?")は除外され、子供の発話のみが対象になる
+    expect(result.transcript).toBe('I went to the park.');
+    expect(result.wordCount).toBe(5);
+  });
+
+  it('speaker_labelが無い(話者分離が無効)場合は全文をそのまま使う(後方互換)', () => {
+    const result = analyzeTranscribeResult({
+      transcribeResult: sampleTranscribeResult,
+      durationSec: 5,
+      priorLemmas: new Set(),
+    });
+    expect(result.transcript).toBe('I went to the park. I saw a dog.');
+  });
+});
+
+describe('pickPrimarySpeaker', () => {
+  it('発話時間の合計が最も長い話者を返す', () => {
+    const items = [
+      { type: 'pronunciation' as const, alternatives: [{ content: 'Hi' }], start_time: '0.0', end_time: '0.5', speaker_label: 'spk_0' },
+      { type: 'pronunciation' as const, alternatives: [{ content: 'there' }], start_time: '1.0', end_time: '4.0', speaker_label: 'spk_1' },
+    ];
+    expect(pickPrimarySpeaker(items)).toBe('spk_1');
+  });
+
+  it('speaker_labelが無ければundefinedを返す', () => {
+    const items = [
+      { type: 'pronunciation' as const, alternatives: [{ content: 'Hi' }], start_time: '0.0', end_time: '0.5' },
+    ];
+    expect(pickPrimarySpeaker(items)).toBeUndefined();
+  });
+
+  it('itemsが空ならundefinedを返す', () => {
+    expect(pickPrimarySpeaker([])).toBeUndefined();
+  });
+});
+
+describe('reconstructTranscript', () => {
+  it('指定した話者の発話だけをつなげて復元する(punctuationは直前の単語に連結)', () => {
+    const items = [
+      { type: 'pronunciation' as const, alternatives: [{ content: 'Hi' }], speaker_label: 'spk_0' },
+      { type: 'pronunciation' as const, alternatives: [{ content: 'there' }], speaker_label: 'spk_1' },
+      { type: 'punctuation' as const, alternatives: [{ content: '!' }], speaker_label: 'spk_1' },
+    ];
+    expect(reconstructTranscript(items, 'spk_1')).toBe('there!');
+  });
+
+  it('話者未指定なら全アイテムを復元する', () => {
+    const items = [
+      { type: 'pronunciation' as const, alternatives: [{ content: 'Hi' }] },
+      { type: 'punctuation' as const, alternatives: [{ content: '!' }] },
+    ];
+    expect(reconstructTranscript(items)).toBe('Hi!');
   });
 });

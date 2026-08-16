@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { getHistory, listChildren } from '../api/client';
 import { LineChart } from '../components/LineChart';
+import { TranscriptView } from '../components/TranscriptView';
 import type { Child, HistoryEntry } from '../types';
 
 /**
@@ -17,6 +18,8 @@ export function DashboardScreen() {
   const [children, setChildren] = useState<Child[] | null>(null);
   const [history, setHistory] = useState<HistoryEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** クリックで文字起こしを展開表示している行の日付(要件外・実機フィードバックにより追加) */
+  const [expandedDate, setExpandedDate] = useState<string | null>(null);
 
   useEffect(() => {
     if (!idToken || !childId) return;
@@ -105,23 +108,44 @@ export function DashboardScreen() {
                   {rows
                     .slice()
                     .reverse()
-                    .map((r) => (
-                      <tr key={r.date}>
-                        <td>{r.date}</td>
-                        <td>{r.durationSec}秒</td>
-                        <td>{r.wordsPerMinute}</td>
-                        <td>{r.typeTokenRatio === null ? '−' : `${Math.round(r.typeTokenRatio * 100)}%`}</td>
-                        <td>{r.wordCount}</td>
-                        <td>+{r.newWordCount}</td>
-                        <td>{r.cumulativeUniqueWordCount}</td>
-                      </tr>
-                    ))}
+                    .map((r) => {
+                      const entry = history?.find((h) => h.date === r.date);
+                      const isExpanded = expandedDate === r.date;
+                      return (
+                        <Fragment key={r.date}>
+                          <tr
+                            className="history-row-clickable"
+                            onClick={() => setExpandedDate(isExpanded ? null : r.date)}
+                          >
+                            <td>{r.date}</td>
+                            <td>{r.durationSec}秒</td>
+                            <td>{r.wordsPerMinute}</td>
+                            <td>{r.typeTokenRatio === null ? '−' : `${Math.round(r.typeTokenRatio * 100)}%`}</td>
+                            <td>{r.wordCount}</td>
+                            <td>+{r.newWordCount}</td>
+                            <td>{r.cumulativeUniqueWordCount}</td>
+                          </tr>
+                          {isExpanded && (
+                            <tr>
+                              <td className="history-detail-cell" colSpan={7}>
+                                {entry?.transcriptEn ? (
+                                  <TranscriptView transcript={entry.transcriptEn} newLemmas={entry.analysis?.newLemmas ?? []} />
+                                ) : (
+                                  <p className="muted">この日の文字起こしはありません</p>
+                                )}
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      );
+                    })}
                 </tbody>
               </table>
             </div>
+            <p className="muted">行をタップすると、その日に子供が話した内容(文字起こし)を確認できます</p>
             <div className="note">
               📌 発話速度・語彙多様度(TTR)・間(ポーズ)は、いずれもAmazon Transcribeの標準出力だけで追加コストなしに算出しています。累積ユニーク語彙数はレンマ(word
-              family)ベースでカウントしています。日本語の回答動画はここでは数値化せず、参考記録として別途視聴できます。
+              family)ベースでカウントしています。日本語の回答動画はここでは数値化せず、参考記録として別途視聴できます。話者分離機能により、録画に親の声が混じっても子供の発話だけを分析対象にしています。
             </div>
           </>
         )}

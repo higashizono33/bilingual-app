@@ -507,3 +507,40 @@ th {
   font-size: 30px;
   margin-top: 14px;
 }
+
+.transcript-box {
+  text-align: left;
+  margin-top: 16px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+}
+
+.transcript-text {
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--ink);
+  margin: 6px 0 8px;
+  white-space: pre-wrap;
+}
+
+.transcript-highlight {
+  background: var(--good-soft);
+  color: var(--good);
+  font-weight: 700;
+  padding: 1px 3px;
+  border-radius: 4px;
+}
+
+.history-row-clickable {
+  cursor: pointer;
+}
+
+.history-row-clickable:hover {
+  background: var(--bg);
+}
+
+.history-detail-cell {
+  padding: 4px 4px 14px !important;
+}
