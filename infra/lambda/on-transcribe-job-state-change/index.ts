@@ -59,6 +59,16 @@ export const handler = async (
     return;
   }
 
+  // 同日に2回以上アップロードされた場合、on-video-uploaded側で新しいジョブに差し替わっている
+  // (transcribeJobNameが更新される)ため、受け取ったこのイベントが古いジョブのものであれば無視する
+  // (常に最新のアップロードを採用する。実機フィードバックにより追加)。
+  if (recording.Item.transcribeJobName !== jobName) {
+    console.warn(
+      `skip: stale transcribe job event (${jobName}); current job for ${childId}/${date} is ${recording.Item.transcribeJobName}`,
+    );
+    return;
+  }
+
   if (status === 'FAILED') {
     const retryCount = (recording.Item.retryCount as number | undefined) ?? 0;
     if (retryCount < MAX_RETRIES) {

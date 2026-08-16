@@ -112,6 +112,39 @@ export function pickPrimarySpeaker(items: TranscribeItem[]): string | undefined 
 }
 
 /**
+ * 信頼度がこの値未満のpronunciationアイテムは分析・文字起こし表示から除外する(デフォルト0.4)。
+ *
+ * Transcribeジョブは`LanguageCode: 'en-US'`固定のため、子供が録画中に誤って日本語を話しても
+ * 「日本語だから除外する」という判定はできず、英語モデルが無理やり英語っぽい単語に変換してしまう
+ * (実機フィードバックにより発覚)。ただしその際のconfidence(信頼度)は通常著しく低くなる傾向があるため、
+ * 低信頼度の単語を除外することで、日本語の誤変換が語彙カウントに混入するのを軽減する簡易ヒューリスティック。
+ * 完全な言語判定ではない(小声・言い淀みなど本物の低信頼度英語も巻き込む可能性はある)。
+ */
+export const MIN_WORD_CONFIDENCE = 0.4;
+
+/**
+ * confidence情報が無いアイテムは対象から除外しない(後方互換。古いTranscribe出力やテストフィクスチャ向け)。
+ */
+function isConfidentPronunciation(item: TranscribeItem, threshold: number): boolean {
+  if (item.type !== 'pronunciation') return true;
+  const confidence = item.alternatives?.[0]?.confidence;
+  if (confidence === undefined) return true;
+  const value = Number.parseFloat(confidence);
+  return Number.isNaN(value) || value >= threshold;
+}
+
+/**
+ * 信頼度がthreshold未満のpronunciationアイテムを取り除く(`MIN_WORD_CONFIDENCE`参照)。
+ * punctuationアイテムやconfidence情報が無いアイテムはそのまま残す。
+ */
+export function filterLowConfidenceItems(
+  items: TranscribeItem[],
+  threshold: number = MIN_WORD_CONFIDENCE,
+): TranscribeItem[] {
+  return items.filter((item) => isConfidentPronunciation(item, threshold));
+}
+
+/**
  * items配列から指定話者(未指定の場合は全話者)の発話だけをつなげて文字列に復元する。
  * type: 'punctuation'のアイテムは直前の単語に空白無しで連結する(Transcribeの標準的な復元方法)。
  */
@@ -197,6 +230,8 @@ export interface AnalysisInput {
   priorLemmas: ReadonlySet<string>;
   /** ポーズ判定の閾値(秒)。デフォルト1.0秒 */
   pauseThresholdSec?: number;
+  /** 日本語混入対策の信頼度足切り閾値。デフォルト`MIN_WORD_CONFIDENCE`(0.4) */
+  minWordConfidence?: number;
 }
 
 /**
@@ -221,17 +256,24 @@ export interface AnalysisResult extends SessionWordMetrics, PauseMetrics, Senten
  * 話者分離(`Settings.ShowSpeakerLabels`)が有効な場合、録画に親の声が混入していても
  * 発話時間の長い話者(子供と推定)だけに絞り込んでから語彙・ポーズ・文の指標を算出する
  * (実機フィードバックにより追加。`pickPrimarySpeaker`/`reconstructTranscript`参照)。
+ * さらに、信頼度が低い単語(誤って混入した日本語をenモデルが無理やり英語に変換したもの等)も
+ * `MIN_WORD_CONFIDENCE`未満なら除外する(`filterLowConfidenceItems`参照)。
  */
 export function analyzeTranscribeResult(input: AnalysisInput): AnalysisResult {
-  const { transcribeResult, durationSec, priorLemmas, pauseThresholdSec } = input;
+  const { transcribeResult, durationSec, priorLemmas, pauseThresholdSec, minWordConfidence } = input;
   const items = transcribeResult.results?.items ?? [];
   const primarySpeaker = pickPrimarySpeaker(items);
 
+  const speakerFiltered = primarySpeaker !== undefined ? items.filter((i) => i.speaker_label === primarySpeaker) : items;
+  const relevantItems = filterLowConfidenceItems(speakerFiltered, minWordConfidence);
+
+  // 話者分離・信頼度フィルタのどちらも何も除外していない場合は、Transcribeが返す全文transcriptを
+  // そのまま使う(復元ロジック(reconstructTranscript)による句読点の間隔等の微妙な差異を避けるための
+  // 後方互換パス。過去の分析結果や、話者分離情報が無い単一話者の録画で有効)
   const transcript =
-    primarySpeaker !== undefined
-      ? reconstructTranscript(items, primarySpeaker)
+    primarySpeaker !== undefined || relevantItems.length !== items.length
+      ? reconstructTranscript(relevantItems)
       : (transcribeResult.results?.transcripts?.[0]?.transcript ?? '');
-  const relevantItems = primarySpeaker !== undefined ? items.filter((i) => i.speaker_label === primarySpeaker) : items;
 
   const tokens = tokenize(transcript);
   const wordMetrics = computeSessionWordMetrics({ tokens, durationSec, priorLemmas });

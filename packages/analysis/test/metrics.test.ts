@@ -4,6 +4,7 @@ import {
   computePauseMetrics,
   computeSentenceMetrics,
   computeSessionWordMetrics,
+  filterLowConfidenceItems,
   pickPrimarySpeaker,
   reconstructTranscript,
   type TranscribeResult,
@@ -187,6 +188,67 @@ describe('analyzeTranscribeResult', () => {
       priorLemmas: new Set(),
     });
     expect(result.transcript).toBe('I went to the park. I saw a dog.');
+  });
+
+  it('信頼度が低い単語(誤って混入した日本語をenモデルが無理やり英語に変換したもの等)は分析対象から除外する', () => {
+    // 「えっと」等の日本語をenモデルが無理やり"et"のような単語に変換したと想定した低信頼度アイテム
+    const withMixedInJapanese: TranscribeResult = {
+      results: {
+        transcripts: [{ transcript: 'I went et home' }],
+        items: [
+          { type: 'pronunciation', alternatives: [{ content: 'I', confidence: '0.99' }], start_time: '0.0', end_time: '0.2' },
+          { type: 'pronunciation', alternatives: [{ content: 'went', confidence: '0.95' }], start_time: '0.3', end_time: '0.6' },
+          { type: 'pronunciation', alternatives: [{ content: 'et', confidence: '0.12' }], start_time: '0.7', end_time: '0.9' },
+          { type: 'pronunciation', alternatives: [{ content: 'home', confidence: '0.91' }], start_time: '1.0', end_time: '1.3' },
+        ],
+      },
+    };
+    const result = analyzeTranscribeResult({
+      transcribeResult: withMixedInJapanese,
+      durationSec: 2,
+      priorLemmas: new Set(),
+    });
+    expect(result.transcript).toBe('I went home');
+    expect(result.wordCount).toBe(3);
+  });
+
+  it('confidence情報が無いアイテムは除外しない(後方互換)', () => {
+    const result = analyzeTranscribeResult({
+      transcribeResult: sampleTranscribeResult,
+      durationSec: 5,
+      priorLemmas: new Set(),
+    });
+    // sampleTranscribeResultのアイテムにはconfidenceが無いので、全語がそのままカウントされる
+    expect(result.wordCount).toBe(9);
+  });
+});
+
+describe('filterLowConfidenceItems', () => {
+  it('デフォルト閾値(0.4)未満のpronunciationアイテムを除外する', () => {
+    const items = [
+      { type: 'pronunciation' as const, alternatives: [{ content: 'hi', confidence: '0.9' }] },
+      { type: 'pronunciation' as const, alternatives: [{ content: 'xyz', confidence: '0.1' }] },
+    ];
+    const result = filterLowConfidenceItems(items);
+    expect(result.map((i) => i.alternatives[0].content)).toEqual(['hi']);
+  });
+
+  it('punctuationアイテムは常に残す', () => {
+    const items = [
+      { type: 'punctuation' as const, alternatives: [{ content: '.' }] },
+    ];
+    expect(filterLowConfidenceItems(items)).toHaveLength(1);
+  });
+
+  it('confidenceが無いアイテムは残す', () => {
+    const items = [{ type: 'pronunciation' as const, alternatives: [{ content: 'hi' }] }];
+    expect(filterLowConfidenceItems(items)).toHaveLength(1);
+  });
+
+  it('閾値を指定できる', () => {
+    const items = [{ type: 'pronunciation' as const, alternatives: [{ content: 'hi', confidence: '0.5' }] }];
+    expect(filterLowConfidenceItems(items, 0.6)).toHaveLength(0);
+    expect(filterLowConfidenceItems(items, 0.4)).toHaveLength(1);
   });
 });
 

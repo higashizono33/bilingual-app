@@ -56,6 +56,10 @@ export const handler: S3Handler = async (event) => {
       continue;
     }
 
+    // 同日に英語動画が2回以上アップロードされた場合、常に最新のものを採用する(実機フィードバックにより
+    // 決定)。Amazon Transcribeの標準バッチジョブには実行中ジョブを止めるAPIが無いため、古い方の
+    // ジョブはそのまま完走させ、その完了通知はon-transcribe-job-state-change側で
+    // (transcribeJobNameが現在のレコードと一致しない=古いジョブとして)無視する。
     // 英語動画: Transcribeジョブを開始(要件定義書 5.3章手順3)
     const jobName = `${childId}_${date}_en_${Date.now()}`;
     const outputKey = `transcribe-output/${childId}/${date}/${jobName}.json`;
@@ -78,7 +82,7 @@ export const handler: S3Handler = async (event) => {
         TableName: RECORDINGS_TABLE_NAME,
         Key: { childId, date },
         UpdateExpression:
-          'SET questionText = if_not_exists(questionText, :q), videoKeyEn = :key, videoFormatEn = :fmt, durationSecEn = :dur, #status = :transcribing, transcribeJobName = :jobName, retryCount = if_not_exists(retryCount, :zero)',
+          'SET questionText = if_not_exists(questionText, :q), videoKeyEn = :key, videoFormatEn = :fmt, durationSecEn = :dur, #status = :transcribing, transcribeJobName = :jobName, retryCount = :zero',
         ExpressionAttributeNames: { '#status': 'status' },
         ExpressionAttributeValues: {
           ':q': DAILY_QUESTION.en,

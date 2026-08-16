@@ -6,6 +6,8 @@ export {
   analyzeTranscribeResult,
   pickPrimarySpeaker,
   reconstructTranscript,
+  filterLowConfidenceItems,
+  MIN_WORD_CONFIDENCE,
 } from './metrics.js';
 export type {
   SessionWordMetrics,
