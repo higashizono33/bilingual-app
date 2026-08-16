@@ -1,5 +1,7 @@
 import { Duration, RemovalPolicy, Stack } from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
+import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import { Construct } from 'constructs';
 
@@ -10,8 +12,10 @@ import { Construct } from 'constructs';
 export class StorageConstruct extends Construct {
   /** 動画(ja.mp4/en.mp4)・子供の顔写真を保存する非公開バケット */
   public readonly mediaBucket: s3.Bucket;
-  /** ダッシュボード(React/Vite build成果物)を配信する静的ウェブサイトホスティング用バケット */
+  /** ダッシュボード(React/Vite build成果物)を格納する非公開バケット。配信はCloudFront経由 */
   public readonly dashboardBucket: s3.Bucket;
+  /** ダッシュボードをHTTPSで配信するCloudFrontディストリビューション */
+  public readonly dashboardDistribution: cloudfront.Distribution;
 
   public readonly childrenTable: dynamodb.Table;
   public readonly recordingsTable: dynamodb.Table;
@@ -53,22 +57,34 @@ export class StorageConstruct extends Construct {
       maxAge: 3000,
     });
 
-    // --- S3: ダッシュボード静的ホスティング ---
-    // 8.1章: CloudFrontは家族のみのアクセスなら不要。S3静的ウェブサイトホスティングのみで十分
+    // --- S3: ダッシュボード配信元(非公開) + CloudFront(HTTPS配信) ---
+    // 当初はS3静的ウェブサイトホスティング単体(8.1章: 家族のみのアクセスならCloudFrontは不要)
+    // という判断だったが、録画機能が使う`navigator.mediaDevices.getUserMedia`はブラウザの
+    // セキュアコンテキスト要件によりHTTPS(またはlocalhost)必須で、S3静的ウェブサイトホスティングの
+    // エンドポイントはHTTPのみ(HTTPS非対応)のため実機(モバイルSafari等)で録画が起動できない
+    // ことが判明。CloudFrontをS3の手前に追加してHTTPS化する(独自ドメイン・ACM証明書は不要。
+    // `*.cloudfront.net`のデフォルトドメインで最初からHTTPS対応。家族のみの低トラフィックなら
+    // 追加コストはごく僅か)。
     // バケット名は固定(`bilingual-app-dashboard-<account>`)にしている。GitHubOidcStack側のIAMポリシーで
     // (BilingualAppStackのデプロイ前でも)ARNを組み立てられるようにするため
     this.dashboardBucket = new s3.Bucket(this, 'DashboardBucket', {
       bucketName: `bilingual-app-dashboard-${Stack.of(this).account}`,
-      websiteIndexDocument: 'index.html',
-      websiteErrorDocument: 'index.html',
-      publicReadAccess: true,
-      blockPublicAccess: new s3.BlockPublicAccess({
-        blockPublicAcls: true,
-        blockPublicPolicy: false,
-        ignorePublicAcls: true,
-        restrictPublicBuckets: false,
-      }),
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       removalPolicy: RemovalPolicy.RETAIN,
+    });
+
+    this.dashboardDistribution = new cloudfront.Distribution(this, 'DashboardDistribution', {
+      defaultRootObject: 'index.html',
+      defaultBehavior: {
+        origin: origins.S3BucketOrigin.withOriginAccessControl(this.dashboardBucket),
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+      },
+      // SPA(React Router)のクライアントサイドルーティング対応: 実体の無いパス(/dashboard/len 等)への
+      // アクセスはS3が403/404を返すため、index.htmlを200で返してフロント側のルーティングに委ねる
+      errorResponses: [
+        { httpStatus: 403, responseHttpStatus: 200, responsePagePath: '/index.html' },
+        { httpStatus: 404, responseHttpStatus: 200, responsePagePath: '/index.html' },
+      ],
     });
 
     // --- DynamoDB(オンデマンドモード。8.1章: プロビジョニングのムダを排除) ---

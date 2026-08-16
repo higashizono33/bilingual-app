@@ -109,9 +109,9 @@ aws cognito-idp admin-create-user \
 - Lambda（S3イベント直接トリガーで分析パイプライン起動。Transcribe完了検知のみ仕様上EventBridge経由）
 - Amazon Transcribe（英語動画の音声認識）
 - Amazon Cognito（保護者モード共有ログイン）
-- S3静的ウェブサイトホスティング（ダッシュボード。`app/`のビルド成果物を`aws s3 sync`で配置）
+- S3（非公開バケット。ダッシュボード=`app/`のビルド成果物を`aws s3 sync`で配置） + CloudFront（HTTPS配信。録画機能の`getUserMedia`がセキュアコンテキスト必須のため採用。独自ドメイン・ACM証明書なしで`*.cloudfront.net`のデフォルトドメインを使用）
 - AWS Budgets（月間コスト監視）
 
-NAT Gateway・VPCエンドポイント・CloudFront・API Gatewayの常時起動的な構成・SSE-KMSなど、常時課金が発生しうるリソースは家庭用途のデータ量では不要なため採用していません。
+NAT Gateway・VPCエンドポイント・API Gatewayの常時起動的な構成・SSE-KMSなど、常時課金が発生しうるリソースは家庭用途のデータ量では不要なため採用していません(CloudFrontのみ、HTTPS必須という機能要件のため例外的に採用。家族のみの低トラフィックで追加コストは僅少)。
 
 GitHub ActionsからのデプロイはOIDC連携でIAMロールを一時的にAssumeする方式です（長期アクセスキーはGitHub Secretsに置かない。`.github/workflows/deploy.yml`参照）。

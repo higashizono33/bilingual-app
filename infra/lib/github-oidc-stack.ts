@@ -109,6 +109,18 @@ export class GitHubOidcStack extends cdk.Stack {
       }),
     );
 
+    // deploy.yml内でS3同期後にCloudFrontのキャッシュを無効化(invalidation)するために必要。
+    // CloudFrontディストリビューションIDはBilingualAppStackデプロイ時に生成されるためARNを
+    // 事前に組み立てられない(distribution部分はワイルドカードにする。アクション自体は
+    // CreateInvalidationのみに絞っているため実害は小さい)
+    deployRole.addToPolicy(
+      new iam.PolicyStatement({
+        sid: 'InvalidateDashboardDistribution',
+        actions: ['cloudfront:CreateInvalidation'],
+        resources: [`arn:aws:cloudfront::${this.account}:distribution/*`],
+      }),
+    );
+
     new cdk.CfnOutput(this, 'DeployRoleArn', { value: deployRole.roleArn });
   }
 }

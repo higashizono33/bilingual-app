@@ -73,6 +73,7 @@ jobs:
         run: |
           OUTPUTS=$(aws cloudformation describe-stacks --stack-name BilingualAppStack --query "Stacks[0].Outputs" --output json)
           echo "bucket=$(echo "$OUTPUTS" | jq -r '.[] | select(.OutputKey=="DashboardBucketName") | .OutputValue')" >> "$GITHUB_OUTPUT"
+          echo "distribution_id=$(echo "$OUTPUTS" | jq -r '.[] | select(.OutputKey=="DashboardDistributionId") | .OutputValue')" >> "$GITHUB_OUTPUT"
           echo "api_url=$(echo "$OUTPUTS" | jq -r '.[] | select(.OutputKey=="ApiUrl") | .OutputValue')" >> "$GITHUB_OUTPUT"
           echo "user_pool_id=$(echo "$OUTPUTS" | jq -r '.[] | select(.OutputKey=="UserPoolId") | .OutputValue')" >> "$GITHUB_OUTPUT"
           echo "user_pool_client_id=$(echo "$OUTPUTS" | jq -r '.[] | select(.OutputKey=="UserPoolClientId") | .OutputValue')" >> "$GITHUB_OUTPUT"
@@ -87,3 +88,9 @@ jobs:
 
       - name: Sync dashboard static files to S3 (app/)
         run: aws s3 sync app/dist "s3://${{ steps.stack-outputs.outputs.bucket }}/" --delete
+
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "${{ steps.stack-outputs.outputs.distribution_id }}" \
+            --paths "/*"
