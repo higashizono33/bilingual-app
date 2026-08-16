@@ -45,6 +45,8 @@ export function useRecorder(options: UseRecorderOptions = {}) {
   const [elapsedSec, setElapsedSec] = useState(0);
   const [result, setResult] = useState<RecorderResult | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
+  /** 背景処理の初期化に失敗し、素のカメラ映像にフォールバックした場合の注意文言(録画自体は継続) */
+  const [backgroundWarning, setBackgroundWarning] = useState<string | null>(null);
 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -75,6 +77,7 @@ export function useRecorder(options: UseRecorderOptions = {}) {
 
   const start = useCallback(async () => {
     setError(null);
+    setBackgroundWarning(null);
     try {
       const rawStream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: 'environment' } },
@@ -94,6 +97,7 @@ export function useRecorder(options: UseRecorderOptions = {}) {
         } catch (bgErr) {
           // 背景処理が使えない端末(WebGL/WASM非対応等)では素のカメラ映像にフォールバックして録画は継続する
           console.warn('背景処理を初期化できなかったため、通常の映像で録画します', bgErr);
+          setBackgroundWarning('背景処理(ぼかし/単色)を初期化できなかったため、通常の映像で録画しています');
         }
       }
       activeStreamRef.current = mediaStream;
@@ -141,5 +145,5 @@ export function useRecorder(options: UseRecorderOptions = {}) {
     setStatus('idle');
   }, [result]);
 
-  return { status, error, elapsedSec, result, stream, start, stop, reset };
+  return { status, error, elapsedSec, result, stream, backgroundWarning, start, stop, reset };
 }

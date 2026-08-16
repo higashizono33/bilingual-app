@@ -3,7 +3,11 @@ import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { errorResponse, jsonResponse } from '../shared/http.js';
 
-const s3 = new S3Client({});
+// requestChecksumCalculation: 'WHEN_REQUIRED' を指定しないと、SDK v3のデフォルト('WHEN_SUPPORTED')が
+// PutObjectCommandの署名にx-amz-checksum-crc32等を自動付与してしまう。presign時点ではボディが
+// 空のため空文字のCRC32が焼き込まれ、クライアントが実際の(空でない)動画blobをPUTすると
+// チェックサム不一致でS3が403を返す(実機検証で確認済み)。
+const s3 = new S3Client({ requestChecksumCalculation: 'WHEN_REQUIRED' });
 const MEDIA_BUCKET_NAME = process.env.MEDIA_BUCKET_NAME!;
 
 const CONTENT_TYPE_TO_EXT: Record<string, string> = {

@@ -30,6 +30,7 @@ export function RecordScreen() {
 
   const [phase, setPhase] = useState<Phase>('ja');
   const [jaClip, setJaClip] = useState<RecorderResult | null>(null);
+  const [enClip, setEnClip] = useState<RecorderResult | null>(null);
   const [uploadProgress, setUploadProgress] = useState<{ ja: number; en: number }>({ ja: 0, en: 0 });
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [todayEntry, setTodayEntry] = useState<HistoryEntry | null>(null);
@@ -60,13 +61,14 @@ export function RecordScreen() {
   );
 
   const startUpload = useCallback(
-    async (enClip: RecorderResult) => {
+    async (clip: RecorderResult) => {
       if (!jaClip) return;
+      setEnClip(clip);
       setPhase('uploading');
       setUploadError(null);
       try {
         await uploadOne('ja', jaClip);
-        await uploadOne('en', enClip);
+        await uploadOne('en', clip);
         setPhase('analyzing');
       } catch (err) {
         setUploadError(err instanceof Error ? err.message : String(err));
@@ -75,6 +77,10 @@ export function RecordScreen() {
     },
     [jaClip, uploadOne],
   );
+
+  const retryUpload = useCallback(() => {
+    if (enClip) startUpload(enClip);
+  }, [enClip, startUpload]);
 
   // 分析待ちポーリング(要件定義書5.3章: Transcribe非同期ジョブの完了を待つ)
   useEffect(() => {
@@ -188,7 +194,7 @@ export function RecordScreen() {
         {phase === 'upload-error' && (
           <div className="center-col">
             <p className="error-text">アップロードに失敗しました: {uploadError}</p>
-            <button className="primary-btn" onClick={() => setPhase('uploading')}>
+            <button className="primary-btn" onClick={retryUpload}>
               もう一度試す
             </button>
           </div>

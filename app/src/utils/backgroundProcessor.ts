@@ -24,7 +24,7 @@ export interface BackgroundProcessorHandle {
 // MediaPipeのWASMランタイム本体とセグメンテーションモデルはCDNから取得する(要件定義書の
 // コスト最小構成の対象外。ビルド成果物へのWASM同梱はVite設定が煩雑になるため見送り、
 // Google公式CDN配信のものをそのまま利用する)
-const WASM_BASE_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm';
+const WASM_BASE_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm';
 const MODEL_URL =
   'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite';
 

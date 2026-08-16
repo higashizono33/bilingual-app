@@ -18,7 +18,7 @@ interface RecordStepProps {
  * (実機フィードバックにより追加。`useRecorder`/`backgroundProcessor.ts`参照)。
  */
 export function RecordStep({ lang, question, onUse, backgroundEffect, backgroundColor }: RecordStepProps) {
-  const { status, error, elapsedSec, result, stream, start, stop, reset } = useRecorder({
+  const { status, error, elapsedSec, result, stream, backgroundWarning, start, stop, reset } = useRecorder({
     backgroundEffect,
     backgroundColor,
   });
@@ -57,6 +57,7 @@ export function RecordStep({ lang, question, onUse, backgroundEffect, background
               <span className="rec-dot" />
               録画中… {elapsedSec}秒
             </p>
+            {backgroundWarning && <p className="error-text">{backgroundWarning}</p>}
             <button className="primary-btn danger-btn" onClick={stop}>
               ■ 録画停止
             </button>
