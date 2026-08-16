@@ -88,10 +88,12 @@ export async function handler(
 
   const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 300 });
 
+  // 注意: `Metadata`(x-amz-meta-*)はgetSignedUrlが生成するpresigned URLの署名済みクエリ
+  // パラメータに既に組み込まれている(SigV4のヘッダーhoisting)。にもかかわらずクライアントが
+  // 同じ値をリクエストヘッダーとしても送ると、そのヘッダーは署名対象(X-Amz-SignedHeaders)に
+  // 含まれていないため、S3が「署名されていないヘッダーがある」として403 AccessDeniedを返す
+  // (実機検証で確認済み)。よってrequiredHeadersにはContent-Typeのみを含める。
   const requiredHeaders: Record<string, string> = { 'Content-Type': body.contentType };
-  if (metadata.durationsec) {
-    requiredHeaders['x-amz-meta-durationsec'] = metadata.durationsec;
-  }
 
   return jsonResponse(200, { uploadUrl, key, requiredHeaders });
 }
