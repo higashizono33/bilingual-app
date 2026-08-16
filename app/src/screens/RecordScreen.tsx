@@ -4,6 +4,7 @@ import { useAuth } from '../auth/useAuth';
 import { getHistory, presignUpload, uploadToPresignedUrl } from '../api/client';
 import { RecordStep } from '../components/RecordStep';
 import type { RecorderResult } from '../hooks/useRecorder';
+import type { BackgroundEffect } from '../utils/backgroundProcessor';
 import type { HistoryEntry } from '../types';
 import { todayDateString } from '../utils/date';
 import { DAILY_QUESTION } from '../constants';
@@ -13,6 +14,14 @@ type Phase = 'ja' | 'transition' | 'en' | 'uploading' | 'analyzing' | 'result' |
 /** 分析待ちのポーリング設定(要件定義書5.3章のTranscribe非同期ジョブを待つ) */
 const POLL_INTERVAL_MS = 3000;
 const POLL_TIMEOUT_MS = 120_000;
+
+/** 背景を単色化する場合の色プリセット(index.cssの配色トークンに合わせた4色) */
+const BACKGROUND_COLOR_PRESETS: { label: string; value: string }[] = [
+  { label: 'ソフトブルー', value: '#e8f0fb' },
+  { label: 'ホワイト', value: '#ffffff' },
+  { label: 'ソフトグリーン', value: '#ecf8f1' },
+  { label: 'グレー', value: '#e4e7eb' },
+];
 
 export function RecordScreen() {
   const { childId } = useParams<{ childId: string }>();
@@ -25,6 +34,10 @@ export function RecordScreen() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [todayEntry, setTodayEntry] = useState<HistoryEntry | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // 背景処理(日本語・英語の両ステップで共通の設定を使う)。デフォルトは単色背景。
+  const [backgroundEffect, setBackgroundEffect] = useState<BackgroundEffect>('color');
+  const [backgroundColor, setBackgroundColor] = useState<string>(BACKGROUND_COLOR_PRESETS[0].value);
 
   const date = todayDateString();
 
@@ -116,10 +129,21 @@ export function RecordScreen() {
           </div>
         </div>
 
+        {(phase === 'ja' || phase === 'en') && (
+          <BackgroundEffectPicker
+            effect={backgroundEffect}
+            color={backgroundColor}
+            onEffectChange={setBackgroundEffect}
+            onColorChange={setBackgroundColor}
+          />
+        )}
+
         {phase === 'ja' && (
           <RecordStep
             lang="ja"
             question={DAILY_QUESTION.ja}
+            backgroundEffect={backgroundEffect}
+            backgroundColor={backgroundColor}
             onUse={(result) => {
               setJaClip(result);
               setPhase('transition');
@@ -143,7 +167,13 @@ export function RecordScreen() {
         )}
 
         {phase === 'en' && (
-          <RecordStep lang="en" question={DAILY_QUESTION.en} onUse={(result) => startUpload(result)} />
+          <RecordStep
+            lang="en"
+            question={DAILY_QUESTION.en}
+            backgroundEffect={backgroundEffect}
+            backgroundColor={backgroundColor}
+            onUse={(result) => startUpload(result)}
+          />
         )}
 
         {phase === 'uploading' && (
@@ -190,6 +220,66 @@ function ProgressBar({ label, percent }: { label: string; percent: number }) {
       <div className="progress-bar-bg">
         <div className="progress-bar-fill" style={{ width: `${percent}%` }} />
       </div>
+    </div>
+  );
+}
+
+/**
+ * 背景処理(なし/ぼかし/単色)の選択UI。日本語・英語どちらのステップでも共通で使う設定なので
+ * RecordScreen側でstateを持ち、ここは表示専用(選択操作はコールバック経由で親に伝える)。
+ */
+function BackgroundEffectPicker({
+  effect,
+  color,
+  onEffectChange,
+  onColorChange,
+}: {
+  effect: BackgroundEffect;
+  color: string;
+  onEffectChange: (effect: BackgroundEffect) => void;
+  onColorChange: (color: string) => void;
+}) {
+  return (
+    <div className="bg-effect-picker">
+      <p className="muted bg-effect-label">背景処理(録画開始前に選んでください)</p>
+      <div className="bg-effect-tabs">
+        <button
+          type="button"
+          className={`bg-effect-tab ${effect === 'off' ? 'active' : ''}`}
+          onClick={() => onEffectChange('off')}
+        >
+          なし
+        </button>
+        <button
+          type="button"
+          className={`bg-effect-tab ${effect === 'blur' ? 'active' : ''}`}
+          onClick={() => onEffectChange('blur')}
+        >
+          🌫️ ぼかし
+        </button>
+        <button
+          type="button"
+          className={`bg-effect-tab ${effect === 'color' ? 'active' : ''}`}
+          onClick={() => onEffectChange('color')}
+        >
+          🎨 単色
+        </button>
+      </div>
+      {effect === 'color' && (
+        <div className="bg-color-swatches">
+          {BACKGROUND_COLOR_PRESETS.map((preset) => (
+            <button
+              key={preset.value}
+              type="button"
+              aria-label={preset.label}
+              title={preset.label}
+              className={`bg-color-swatch ${color === preset.value ? 'active' : ''}`}
+              style={{ background: preset.value }}
+              onClick={() => onColorChange(preset.value)}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

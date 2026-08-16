@@ -14,6 +14,7 @@ export function ParentModeScreen() {
   const navigate = useNavigate();
   const [children, setChildren] = useState<Child[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reordering, setReordering] = useState(false);
 
   const reload = () => {
     if (!idToken) return;
@@ -24,6 +25,31 @@ export function ParentModeScreen() {
 
   useEffect(reload, [idToken]);
 
+  /**
+   * ホーム画面での並び順(左右)を入れ替える。隣同士のsortOrderをswapしてPUTし直すだけ
+   * (要件定義書には無いが、実機フィードバックにより追加。子供の人数が少ないため単純な隣接入れ替えで十分)。
+   */
+  async function moveChild(index: number, direction: -1 | 1) {
+    if (!children || !idToken) return;
+    const otherIndex = index + direction;
+    if (otherIndex < 0 || otherIndex >= children.length) return;
+    const a = children[index];
+    const b = children[otherIndex];
+    setReordering(true);
+    setError(null);
+    try {
+      await Promise.all([
+        upsertChild(idToken, a.childId, { sortOrder: b.sortOrder }),
+        upsertChild(idToken, b.childId, { sortOrder: a.sortOrder }),
+      ]);
+      reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setReordering(false);
+    }
+  }
+
   return (
     <main className="page">
       <button className="back-link" onClick={() => navigate('/')}>
@@ -32,8 +58,37 @@ export function ParentModeScreen() {
       <h1>⚙️ 保護者モード</h1>
       {error && <p className="error-text">{error}</p>}
 
-      {children?.map((child) => (
-        <ChildForm key={child.childId} child={child} idToken={idToken!} onSaved={reload} />
+      {children && children.length > 1 && (
+        <p className="muted">
+          ホーム画面での表示順(左右)は、下の⬅️➡️ボタンで並び替えられます。
+        </p>
+      )}
+
+      {children?.map((child, index) => (
+        <div key={child.childId}>
+          {children.length > 1 && (
+            <div className="order-controls">
+              <button
+                type="button"
+                className="ghost-btn"
+                disabled={reordering || index === 0}
+                onClick={() => moveChild(index, -1)}
+              >
+                ⬅️ 左へ
+              </button>
+              <span className="muted">表示順 {index + 1}/{children.length}</span>
+              <button
+                type="button"
+                className="ghost-btn"
+                disabled={reordering || index === children.length - 1}
+                onClick={() => moveChild(index, 1)}
+              >
+                右へ ➡️
+              </button>
+            </div>
+          )}
+          <ChildForm child={child} idToken={idToken!} onSaved={reload} />
+        </div>
       ))}
 
       <ChildForm child={null} idToken={idToken!} onSaved={reload} />

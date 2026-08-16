@@ -32,7 +32,7 @@ export function listChildren(idToken: string): Promise<{ children: Child[] }> {
 export function upsertChild(
   idToken: string,
   childId: string,
-  data: { name: string; birthdate: string; photoKey?: string },
+  data: { name?: string; birthdate?: string; photoKey?: string; sortOrder?: number },
 ): Promise<{ childId: string }> {
   return request(`/children/${encodeURIComponent(childId)}`, idToken, {
     method: 'PUT',

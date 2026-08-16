@@ -1,4 +1,5 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { createBackgroundProcessor, type BackgroundEffect, type BackgroundProcessorHandle } from '../utils/backgroundProcessor';
 
 export type RecorderStatus = 'idle' | 'recording' | 'preview' | 'error';
 
@@ -21,12 +22,24 @@ export interface RecorderResult {
   previewUrl: string;
 }
 
+export interface UseRecorderOptions {
+  /** 背景処理('off'ならそのまま、'blur'/'color'なら人物以外を加工する)。デフォルト'off' */
+  backgroundEffect?: BackgroundEffect;
+  /** backgroundEffect: 'color' のときの塗りつぶし色 */
+  backgroundColor?: string;
+}
+
 /**
  * `getUserMedia` によるアプリ内カメラ録画(要件定義書5.1章)。
  * 撮影→アップロードを1つの流れに統合するため、専用アプリ内カメラのみをサポートする
  * (端末の標準カメラアプリからの手動アップロードは行わない)。
+ *
+ * 親が子供を撮る用途のため、背面カメラ(environment)を優先して起動する(`facingMode: { ideal: 'environment' }`。
+ * `ideal`指定なので背面カメラの無い端末=PCの内蔵カメラなどでは自動的に利用可能なカメラにフォールバックする)。
  */
-export function useRecorder() {
+export function useRecorder(options: UseRecorderOptions = {}) {
+  const { backgroundEffect = 'off', backgroundColor } = options;
+
   const [status, setStatus] = useState<RecorderStatus>('idle');
   const [error, setError] = useState<Error | null>(null);
   const [elapsedSec, setElapsedSec] = useState(0);
@@ -37,17 +50,54 @@ export function useRecorder() {
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startedAtRef = useRef<number>(0);
+  /** カメラから取得した生ストリーム。背景処理ON時もカメラ自体の停止(ライト消灯)にはこちらを使う */
+  const rawStreamRef = useRef<MediaStream | null>(null);
+  /** 背景処理(セグメンテーション)のrAFループ等を保持するハンドル。背景処理OFF時はnull */
+  const processorRef = useRef<BackgroundProcessorHandle | null>(null);
+  /** MediaRecorder/プレビューに渡している実ストリーム(生 or 背景処理後) */
+  const activeStreamRef = useRef<MediaStream | null>(null);
 
-  const stopStream = useCallback((s: MediaStream | null) => {
-    s?.getTracks().forEach((t) => t.stop());
-    if (timerRef.current) clearInterval(timerRef.current);
-    timerRef.current = null;
+  const cleanup = useCallback(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    processorRef.current?.stop();
+    processorRef.current = null;
+    activeStreamRef.current?.getTracks().forEach((t) => t.stop());
+    activeStreamRef.current = null;
+    rawStreamRef.current?.getTracks().forEach((t) => t.stop());
+    rawStreamRef.current = null;
   }, []);
+
+  // アンマウント時(録画途中で画面遷移した場合など)にカメラ・GPUリソースを確実に解放する
+  useEffect(() => cleanup, [cleanup]);
 
   const start = useCallback(async () => {
     setError(null);
     try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      const rawStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } },
+        audio: true,
+      });
+      rawStreamRef.current = rawStream;
+
+      let mediaStream = rawStream;
+      if (backgroundEffect !== 'off') {
+        try {
+          const processor = await createBackgroundProcessor(rawStream, {
+            effect: backgroundEffect,
+            color: backgroundColor,
+          });
+          processorRef.current = processor;
+          mediaStream = processor.stream;
+        } catch (bgErr) {
+          // 背景処理が使えない端末(WebGL/WASM非対応等)では素のカメラ映像にフォールバックして録画は継続する
+          console.warn('背景処理を初期化できなかったため、通常の映像で録画します', bgErr);
+        }
+      }
+      activeStreamRef.current = mediaStream;
+
       const mimeType = pickSupportedMimeType();
       const recorder = mimeType ? new MediaRecorder(mediaStream, { mimeType }) : new MediaRecorder(mediaStream);
       chunksRef.current = [];
@@ -59,7 +109,7 @@ export function useRecorder() {
         const durationSec = Math.max(1, Math.round((Date.now() - startedAtRef.current) / 1000));
         setResult({ blob, mimeType: blob.type, durationSec, previewUrl: URL.createObjectURL(blob) });
         setStatus('preview');
-        stopStream(mediaStream);
+        cleanup();
         setStream(null);
       };
       recorderRef.current = recorder;
@@ -72,10 +122,11 @@ export function useRecorder() {
         setElapsedSec(Math.round((Date.now() - startedAtRef.current) / 1000));
       }, 1000);
     } catch (err) {
+      cleanup();
       setError(err instanceof Error ? err : new Error(String(err)));
       setStatus('error');
     }
-  }, [stopStream]);
+  }, [backgroundEffect, backgroundColor, cleanup]);
 
   const stop = useCallback(() => {
     if (recorderRef.current && recorderRef.current.state !== 'inactive') {

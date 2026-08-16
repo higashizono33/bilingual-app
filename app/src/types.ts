@@ -4,6 +4,8 @@ export interface Child {
   birthdate: string;
   /** 顔写真の署名付きURL。未設定の場合はnull(プレースホルダー表示。要件定義書5.5章) */
   photoUrl: string | null;
+  /** ホーム画面での表示順(小さいほど先=左に表示)。APIが常に一貫した値を計算して返す */
+  sortOrder: number;
 }
 
 export type RecordingStatus = 'uploaded' | 'transcribing' | 'analyzed' | 'failed';
